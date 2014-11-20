@@ -1,0 +1,46 @@
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+Vilk Email.
+
+Note that Go has an extremely rich set of standard packages that are well-tested that you should definitely take advantage of!
+
+http://golang.org/pkg/
+
+These include packages for cryptography (http://golang.org/pkg/crypto/), web sockets (linked in project description), and encoding Go structures for transmission to disk/over sockets/etc (http://golang.org/pkg/encoding/binary/). Thus, most of the low-level implementation work is done already!
+
+In my opinion, what's centrally important here are your design decisions for how cryptography, fault tolerance, and synchronization will work. Try to work those details out at a high level (whiteboard it! read some papers/Wikipedia/etc!) before diving into implementation. Once you figure it out, you'll likely find that translating it into working Go code is fairly straightforward!
+
+Some misc. Go notes:
+READ THIS DOCUMENT: https://golang.org/doc/code.html
+
+Go is opinionated in how you write your code and structure your project. Even if you hate it, follow Go's opinions so its tools function appropriately on your project... and so Emery doesn't have to spend hours figuring out how to build your project.
+
+Channels and Goroutines are your friends. 
+
+You can nicely decompose your application into logical chunks that execute in parallel, and that safely pass data to one another through channels. For example, you could imagine spawning a goroutine that handles the connection to the browser, a goroutine that handles connecting to peers, and a goroutine that handles application logic. A common design pattern is to spawn a goroutine that blocks on a channel in an infinite loop (meaning, it waits for a message to come through the channel, processes the message, and repeats until the channel is closed).
+
+This is quite nice for team projects, since you can agree upon the interface among components, and more-or-less develop them independently!
+
+Avoid mutable shared memory when possible. If you have multiple goroutines accessing the same piece of memory and you're not disciplined with applying mutexes, you're gonna have a bad time. Abuse channels. :)
+
+Go makes writing unit tests very easy. Because Go is structurally typed, you can pass in a mock object that implements the same interface as e.g. a network connection and unit test your application. (Some scenarios: Network timeouts, leader election, malicious peers...) Go has a built-in unit tester that you should try to take advantage of: http://golang.org/pkg/testing/
+
+Go has many other useful tools. godoc generates documentation from comments, go fmt auto-formats your code so it looks pretty, go test runs unit tests, etc.
+
+Have fun!
+
+——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+Useful Tools.
+
+Login to Edlab machines.
+
+	ssh igemp@elnux[machine # (e.g. 1)].cs.umass.edu
+
+
+Setup an http server serving local files from [path] at [address] using the http-server node app. (or use python -m SimpleHTTPServer)
+
+	http-server [path (e.g. ./ as in current directory)] -a [address (e.g. local ip address)]
+
+
+Install Go packages. (need mercurial)
+
+	go get “[package address (e.g. golang.org/x/net/websocket)”]
