@@ -1,4 +1,4 @@
-——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Vilk Email.
 
 Note that Go has an extremely rich set of standard packages that are well-tested that you should definitely take advantage of!
@@ -28,7 +28,7 @@ Go has many other useful tools. godoc generates documentation from comments, go 
 
 Have fun!
 
-——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Useful Tools.
 
 Login to Edlab machines.
@@ -44,3 +44,12 @@ Setup an http server serving local files from [path] at [address] using the http
 Install Go packages. (need mercurial)
 
 	go get “[package address (e.g. golang.org/x/net/websocket)”]
+
+
+Plan.
+
+	1) HTTP server detects url request
+	2) HTTP server checks requester IP against hash of peers, connections, and channels
+	3) If new peer -> create new websocket connection and peer to peer channel
+	4) Serve html + js client + go client + new connection + new channel to peer
+	5) Else -> html + js client + go client + old connection + old channel to peer
