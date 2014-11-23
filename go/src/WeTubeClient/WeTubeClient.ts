@@ -1,4 +1,5 @@
 /// <reference path="youtube.d.ts" />
+/// <reference path="PlayerControls.ts" />
 
 // This just adds a youtube iframe to the div in the html
 
@@ -17,6 +18,9 @@ function onYouTubeIframeAPIReady() {
     height: 390,
     width: 640,
     videoId: 'M7lc1UVf-VE',
+    playerVars: {
+      'controls': 0
+    },
     events: {
       'onReady': onPlayerReady,
       'onStateChange': onPlayerStateChange
@@ -40,6 +44,26 @@ function onPlayerStateChange(event) {
     done = true;
   }
 }
-function stopVideo() {
-  player.stopVideo();
+
+console.log("Starting WeTubeClient (JS)")
+
+// Establish WebSocket Connection with WeTube (Go) Client
+var myWebSocket: WebSocket;
+var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
+tempWebSocket.onopen = function (event) {
+  tempWebSocket.send("Which port should I use?");
+  console.log("Which port should I use?");
+};
+tempWebSocket.onmessage = function (event) {
+  console.log("WeTubeServer: Use port "+event.data)
+  console.log("Connecting to websocket at ws://localhost:"+event.data+"/ws");
+  myWebSocket = new WebSocket("ws://localhost:"+event.data+"/ws", "protocolOne");
+  myWebSocket.onopen = function (event) {
+    console.log("Hello, world!");
+    myWebSocket.send("Hello, world!");
+  };
+  myWebSocket.onmessage = function (event) {
+    console.log("Go Client: "+event.data);
+  }
+  tempWebSocket.close();
 }

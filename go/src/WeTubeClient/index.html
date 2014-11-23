@@ -4,5 +4,20 @@
     <!-- 1. The <iframe> (and video player) will replace this <div> tag. -->
     <div id="player"></div>
     <script type="text/javascript" src="WeTubeClient.js "></script>
+    <script type="text/javascript" src="PlayerControls.js "></script>
+    <div>
+        <h3>Controls</h3>
+        <button type="button" onclick="playVideo()">Play</button>&nbsp;
+        <button type="button" onclick="pauseVideo()">Pause</button>&nbsp;
+        <button type="button" onclick="stopVideo()">Stop</button>&nbsp;
+        Seek to: <input type="text" id="seekTo_Target" size="3">&nbsp;<button type="button" id="seekTo_Button">Go</button>
+        <script>
+            var seekTo_Target = document.getElementById('seekTo_Target');
+            var seekTo_Button = document.getElementById('seekTo_Button');
+            seekTo_Button.addEventListener('click', function(){
+                seekTo(seekTo_Target.value);
+            });
+        </script>
+    </div>
   </body>
 </html>

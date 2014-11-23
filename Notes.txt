@@ -43,7 +43,7 @@ Setup an http server serving local files from [path] at [address] using the http
 
 Install Go packages. (need mercurial)
 
-	go get “[package address (e.g. golang.org/x/net/websocket)”]
+	go get “[package address (e.g. golang.org/x/net/websocket)]”
 
 
 Plan.
