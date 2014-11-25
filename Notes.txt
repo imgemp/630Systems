@@ -53,3 +53,5 @@ Plan.
 	3) If new peer -> create new websocket connection and peer to peer channel
 	4) Serve html + js client + go client + new connection + new channel to peer
 	5) Else -> html + js client + go client + old connection + old channel to peer
+
+TLS crypto - http://golang.org/pkg/crypto/tls/#example_Dial
