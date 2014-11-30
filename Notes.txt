@@ -55,3 +55,7 @@ Plan.
 	5) Else -> html + js client + go client + old connection + old channel to peer
 
 TLS crypto - http://golang.org/pkg/crypto/tls/#example_Dial
+
+
+
+server tracks peer info: ID(IP or Port), websocket address (aka mailbox)

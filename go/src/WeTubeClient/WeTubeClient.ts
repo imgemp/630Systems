@@ -48,7 +48,7 @@ function onPlayerStateChange(event) {
 console.log("Starting WeTubeClient (JS)")
 
 // Establish WebSocket Connection with WeTube (Go) Client
-var myWebSocket: WebSocket;
+var myLocalWebSocket: WebSocket;
 var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 tempWebSocket.onopen = function (event) {
   tempWebSocket.send("Which port should I use?");
@@ -57,12 +57,12 @@ tempWebSocket.onopen = function (event) {
 tempWebSocket.onmessage = function (event) {
   console.log("WeTubeServer: Use port "+event.data)
   console.log("Connecting to websocket at ws://localhost:"+event.data+"/ws");
-  myWebSocket = new WebSocket("ws://localhost:"+event.data+"/ws", "protocolOne");
-  myWebSocket.onopen = function (event) {
-    console.log("Hello, world!");
-    myWebSocket.send("Hello, world!");
+  myLocalWebSocket = new WebSocket("ws://localhost:"+event.data+"/ws", "protocolOne");
+  myLocalWebSocket.onopen = function (event) {
+    console.log("Hello, Go Client!");
+    myLocalWebSocket.send("Hello, Go Client!");
   };
-  myWebSocket.onmessage = function (event) {
+  myLocalWebSocket.onmessage = function (event) {
     console.log("Go Client: "+event.data);
   }
   tempWebSocket.close();
