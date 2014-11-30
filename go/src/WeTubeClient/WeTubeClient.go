@@ -3,132 +3,31 @@ package main
 import (
     "fmt"
     "log"
+    "net"
     "net/http"
     "golang.org/x/net/websocket"
     "strings"
     "strconv"
+    // "errors"
     "encoding/binary"
     "bytes"
 )
 
 // Global Variables
-var origin string = "http://localhost/"
-var localPort int
-var p2pPort int
-var myLocalWebsocket string
-var myP2PWebsocket string
+var (
+    origin string = "http://localhost/"
+    localPort int
+    p2pPort int
+    myLocalWebsocket string
+    myP2PSocket string
+)
 // var localChannel chan int
 var p2pChannel chan int32
 var count int32
 
-// Relay the data received on the WebSocket.
-func RelayAndRespond(ws *websocket.Conn) {
-    // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("JS Client: %s.\n", msg[:n])
-    // Relay Message to Peers
-    // Receive Message from Peers
-    // Respond with Message
-    if _, err := ws.Write([]byte("Hello to you too!")); err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Hello to you too!\n")
-    }
-}
-
-// Relay the data received on the WebSocket.
-func P2P() {
-    // Receive Message
-    // var msg = make([]byte, 512)
-    // var n int
-    // var err error
-    // if n, err = ws.Read(msg); err != nil {
-    //     log.Fatal(err)
-    // }
-    // if n != 0 {
-    //     fmt.Printf("Other Peer: %s.\n", msg[:n])
-    // }
-    // buf := bytes.NewBuffer(msg[:n])
-    // binary.Read(buf, binary.LittleEndian, &count)
-    for true {
-        // Increment Count and Write to Buffer
-        buf := new(bytes.Buffer)
-        count = <-p2pChannel
-        count = count + 1
-        var err error
-        err = binary.Write(buf, binary.LittleEndian, count)
-        if err != nil {
-            fmt.Println("binary.Write failed:", err)
-        }
-        // Dial Server Websocket for Peer List
-        var serverWebsocket_URL = "ws://localhost:8080/ws/go/peer"
-        var serverWebsocket *websocket.Conn
-        serverWebsocket, err = websocket.Dial(serverWebsocket_URL, "", origin)
-        if err != nil {
-            log.Fatal(err)
-        }
-        if _, err := serverWebsocket.Write([]byte(myP2PWebsocket)); err != nil {
-            log.Fatal(err)
-        } else {
-            fmt.Printf("What is my peer's websocket port?\n")
-        }
-        // Retrieve Peer List from Server - just retrieving other peer websocket for now
-        var msg = make([]byte, 512)
-        var n int
-        if n, err = serverWebsocket.Read(msg); err != nil {
-            log.Fatal(err)
-        }
-        fmt.Printf("WebServer: Your peer's websocket port is %s\n", msg[:n])
-        var temp []string
-        var myPeerWebsocket_URL string
-        var myPeerWebsocket *websocket.Conn
-        temp = append(temp,"ws://localhost:")
-        temp = append(temp,string(msg[:n]))
-        temp = append(temp,"/ws/peer")
-        myPeerWebsocket_URL = strings.Join(temp,"")
-        // Write Message to Peers
-        myPeerWebsocket, err = websocket.Dial(myPeerWebsocket_URL, "", origin)
-        if err != nil {
-            log.Fatal(err)
-        }
-        if _, err := myPeerWebsocket.Write(buf.Bytes()); err != nil {
-            log.Fatal(err)
-        } else {
-            fmt.Printf("I've updated count to %d\n",count)
-        }
-    }
-}
-
-// func Listen4JS() {
-// }
-
-func Add2PeerChannel(ws *websocket.Conn) {
-    // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    if n != 0 {
-        fmt.Printf("Other Peer: %s.\n", msg[:n])
-    }
-    buf := bytes.NewBuffer(msg[:n])
-    binary.Read(buf, binary.LittleEndian, &count)
-    p2pChannel <- count
-}
-
-func main() {
-
-    // ONLY FOR TESTING
-
-    // Ping Server Websocket for Ports
-    url := "ws://localhost:8080/ws/go/init"
+// Ping Server Websocket for Ports
+func RetrieveSockets() {
+    url := "ws://localhost:8080/ws/go"
     tempWS, err := websocket.Dial(url, "", origin)
     if err != nil {
         log.Fatal(err)
@@ -156,53 +55,314 @@ func main() {
     myLocalWebsocket = strings.Join(temp,"")
     temp = append(empty,":")
     temp = append(temp,strconv.Itoa(p2pPort))
-    myP2PWebsocket = strings.Join(temp,"")
+    myP2PSocket = strings.Join(temp,"")
     fmt.Printf("WeTubeServer: Use port %s and %s\n",strconv.Itoa(localPort),strconv.Itoa(p2pPort))
-    // tempWS.Close() // How do I hang up the websocket connection?
+}
 
-    // Create Client Websocket Handler
-    http.Handle("/ws", websocket.Handler(RelayAndRespond))
-
-    // Create Peer to Peer Websocket Handler
-    http.Handle("/ws/peer", websocket.Handler(Add2PeerChannel))
-
-    // Listen and Serve at Websockets
-    fmt.Printf("Listening for [internal,p2p] websocket at ws://localhost[%s/ws,%s/ws/peer]\n", myLocalWebsocket, myP2PWebsocket)
-    err = http.ListenAndServe(myLocalWebsocket, nil)
-    if err != nil {
-        panic("ListenAndServe: " + err.Error())
+// Relay the data received on the WebSocket.
+func ClientRelay(ws *websocket.Conn) {
+    // Receive Message
+    var msg = make([]byte, 512)
+    var n int
+    var err error
+    if n, err = ws.Read(msg); err != nil {
+        log.Fatal(err)
     }
-    err = http.ListenAndServe(myP2PWebsocket, nil)
-    if err != nil {
-        panic("ListenAndServe: " + err.Error())
+    fmt.Printf("JS Client: %s.\n", msg[:n])
+    // Relay Message to Peers
+    // Receive Message from Peers
+    // Respond with Message
+    if _, err := ws.Write([]byte("Hello to you too!")); err != nil {
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Hello to you too!\n")
     }
+}
 
+// Relay the data received on the WebSocket.
+// func P2P() {
+//     // Receive Message
+//     // var msg = make([]byte, 512)
+//     // var n int
+//     // var err error
+//     // if n, err = ws.Read(msg); err != nil {
+//     //     log.Fatal(err)
+//     // }
+//     // if n != 0 {
+//     //     fmt.Printf("Other Peer: %s.\n", msg[:n])
+//     // }
+//     // buf := bytes.NewBuffer(msg[:n])
+//     // binary.Read(buf, binary.LittleEndian, &count)
+//     for true {
+//         // Increment Count and Write to Buffer
+//         buf := new(bytes.Buffer)
+//         count = <-p2pChannel
+//         count = count + 1
+//         var err error
+//         err = binary.Write(buf, binary.LittleEndian, count)
+//         if err != nil {
+//             fmt.Println("binary.Write failed:", err)
+//         }
+//         // Dial Server Websocket for Peer List
+//         var serverWebsocket_URL = "ws://localhost:8080/ws/go/peer"
+//         var serverWebsocket *websocket.Conn
+//         serverWebsocket, err = websocket.Dial(serverWebsocket_URL, "", origin)
+//         if err != nil {
+//             log.Fatal(err)
+//         }
+//         if _, err := serverWebsocket.Write([]byte(myP2PWebsocket)); err != nil {
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("What is my peer's websocket port?\n")
+//         }
+//         // Retrieve Peer List from Server - just retrieving other peer websocket for now
+//         var msg = make([]byte, 512)
+//         var n int
+//         if n, err = serverWebsocket.Read(msg); err != nil {
+//             log.Fatal(err)
+//         }
+//         fmt.Printf("WebServer: Your peer's websocket port is %s\n", msg[:n])
+//         var temp []string
+//         var myPeerWebsocket_URL string
+//         var myPeerWebsocket *websocket.Conn
+//         temp = append(temp,"ws://localhost:")
+//         temp = append(temp,string(msg[:n]))
+//         temp = append(temp,"/ws/peer")
+//         myPeerWebsocket_URL = strings.Join(temp,"")
+//         // Write Message to Peers
+//         myPeerWebsocket, err = websocket.Dial(myPeerWebsocket_URL, "", origin)
+//         if err != nil {
+//             log.Fatal(err)
+//         }
+//         if _, err := myPeerWebsocket.Write(buf.Bytes()); err != nil {
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("I've updated count to %d\n",count)
+//         }
+//     }
+// }
+
+// func Add2PeerChannel(ws *websocket.Conn) {
+//     // Receive Message
+//     var msg = make([]byte, 512)
+//     var n int
+//     var err error
+//     if n, err = ws.Read(msg); err != nil {
+//         log.Fatal(err)
+//     }
+//     if n != 0 {
+//         fmt.Printf("Other Peer: %s.\n", msg[:n])
+//     }
+//     buf := bytes.NewBuffer(msg[:n])
+//     binary.Read(buf, binary.LittleEndian, &count)
+//     p2pChannel <- count
+// }
+
+func servePeer(c net.Conn) {
+    fmt.Printf("<%saccepted connection",c.RemoteAddr())
+    // Read count
+    var msg = make([]byte, 512)
+    var n int
+    var err error
+    if n, err = c.Read(msg); err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Peer: %s\n", msg[:n])
+    buf := bytes.NewBuffer(msg[:n])
+    binary.Read(buf, binary.LittleEndian, &count)
+    fmt.Printf("Peer: Count is %d\n",count)
+    // Increment Count
+    count += 1
+    err = binary.Write(buf, binary.LittleEndian, count)
+    if err != nil {
+        fmt.Println("binary.Write failed:", err)
+    }
+    // Redial Peer
+    var addr string = "localhost:12348"
+    if (p2pPort == 12348) {
+        addr = "localhost:12346"
+    }
+    fmt.Printf("Dialing peer's socket at %s\n",addr)
+    c, err = net.Dial("tcp",addr)
+    if err != nil {
+        fmt.Printf("Peer's socket not ready!\n")
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Dial successful!\n")
+    }
+    // Write to socket
+    if _, err := c.Write(buf.Bytes()); err != nil {
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Count is %d\n",count)
+    }
+    c.Close()
+    fmt.Printf("<%sclosed\n",c.RemoteAddr())
+}
+
+func startComm() {
     // Test by Incrementing Count back and forth
     count = 0
     if (p2pPort == 12348) {
         // Convert count to binary
         buf := new(bytes.Buffer)
-        err = binary.Write(buf, binary.LittleEndian, count)
+        err := binary.Write(buf, binary.LittleEndian, count)
         if err != nil {
             fmt.Println("binary.Write failed:", err)
         }
-        // Dial websocket
-        url = "ws://localhost:12346/ws/peer"
-        fmt.Printf("Dialing peer's websocket at %s\n",url)
-        tempWS, err = websocket.Dial(url, "", origin)
+        // Dial Peer
+        var addr string = "localhost:12346"
+        fmt.Printf("Dialing peer's socket at %s\n",addr)
+        c, err := net.Dial("tcp",addr)
         if err != nil {
-            fmt.Printf("Peer's websocket not ready!\n")
+            fmt.Printf("Peer's socket not ready!\n")
             log.Fatal(err)
         } else {
-            fmt.Printf("Initial P2P message sent!\n")
+            fmt.Printf("Dial successful!\n")
         }
-        // Write to websocket
-        if _, err := tempWS.Write(buf.Bytes()); err != nil {
+        // Write to socket
+        if _, err := c.Write(buf.Bytes()); err != nil {
             log.Fatal(err)
         } else {
             fmt.Printf("Count is %d\n",count)
         }
     }
+}
 
-    go P2P()
+// type Message struct {
+//     ID   string
+//     Addr string
+//     Body string
+// }
+
+// var peers = &Peers{m: make(map[string]chan<- Message)}
+
+// type Peers struct {
+//     m  map[string]chan<- Message
+//     mu sync.RWMutex
+// }
+
+// func (p *Peers) Add(addr string) <-chan Message {
+//     p.mu.Lock()
+//     defer p.mu.Unlock()
+//     if _, ok := p.m[addr]; ok {
+//         return nil
+//     }
+//     ch := make(chan Message)
+//     p.m[addr] = ch
+//     return ch
+// }
+
+// func (p *Peers) Remove(addr string) {
+//     p.mu.Lock()
+//     defer p.mu.Unlock()
+//     delete(p.m, addr)
+// }
+
+// func (p *Peers) List() []chan<- Message {
+//     p.mu.RLock()
+//     defer p.mu.RUnlock()
+//     l := make([]chan<- Message, 0, len(p.m))
+//     for _, ch := range p.m {
+//         l = append(l, ch)
+//     }
+//     return l
+// }
+
+// func broadcast(m Message) {
+//     for _, ch := range peers.List() {
+//         select {
+//         case ch <- m:
+//         default:
+//             // Okay to drop messages sometimes.
+//         }
+//     }
+// }
+
+// func dial(addr string) {
+//     if addr == self {
+//         return // Don't try to dial self.
+//     }
+
+//     ch := peers.Add(addr)
+//     if ch == nil {
+//         return // Peer already connected.
+//     }
+//     defer peers.Remove(addr)
+
+//     log.Println(">", addr, "dialling")
+//     c, err := net.Dial("tcp", addr)
+//     if err != nil {
+//         log.Println(">", addr, "dial error:", err)
+//         return
+//     }
+//     log.Println(">", addr, "connected")
+//     defer func() {
+//         c.Close()
+//         log.Println(">", addr, "closed")
+//     }()
+
+//     e := json.NewEncoder(c)
+//     for m := range ch {
+//         err := e.Encode(m)
+//         if err != nil {
+//                 log.Println(">", addr, "error:", err)
+//                 return
+//         }
+//     }
+// }
+
+// var seenIDs = struct {
+//     m map[string]bool
+//     sync.Mutex
+// }{m: make(map[string]bool)}
+
+// func Seen(id string) bool {
+//     if !*dedup || id == "" {
+//         return false
+//     }
+//     seenIDs.Lock()
+//     ok := seenIDs.m[id]
+//     seenIDs.m[id] = true
+//     seenIDs.Unlock()
+//     return ok
+// }
+
+func main() {
+
+    // ONLY FOR TESTING
+    RetrieveSockets()
+
+    // Listen at Peer Socket
+    fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocket)
+    l, err := net.Listen("tcp",myP2PSocket)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Serve Peers on Request
+    go func() {
+        for {
+            fmt.Printf("Waiting for peer\n")
+            c, err := l.Accept()
+            if err != nil {
+                    log.Fatal(err)
+            }
+            fmt.Printf("Accepting peer\n")
+            go servePeer(c)
+        }
+    }()
+
+    go startComm()
+
+    // Create Client Websocket Handler
+    http.Handle("/ws", websocket.Handler(ClientRelay))
+
+    // Listen at Client Websocket
+    fmt.Printf("Listening for JS Client at ws://localhost%s/ws\n", myLocalWebsocket)
+    err = http.ListenAndServe(myLocalWebsocket, nil)
+    if err != nil {
+        panic("ListenAndServe: " + err.Error())
+    }
+
 }
