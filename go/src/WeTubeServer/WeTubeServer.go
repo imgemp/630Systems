@@ -10,10 +10,10 @@ import (
 
 // Peer Map
 var IDList []string
-var IDMap map[string]string // Map of Peer IDs to P2P Websockets
+var IDMap = make(map[string]string) // Map of Peer IDs to P2P Websockets
 
 // ONLY FOR TESTING
-// Issue a new ports (internal and external websockets) to the Go Client
+// Issue new ports (internal and external websockets) to the Go Client
 var Port int = 12343
 var GoPortList []int
 var JSClientCount = 0
@@ -54,31 +54,7 @@ func IssuePort_JS(ws *websocket.Conn) {
             fmt.Printf("Use ports %s and %s\n",strconv.Itoa(GoPortList[JSClientCount]),strconv.Itoa(GoPortList[JSClientCount]+1))
             IDMap[strconv.Itoa(GoPortList[JSClientCount])] = strconv.Itoa(GoPortList[JSClientCount]+1)
         }
-        JSClientCount += 2
-    }
-}
-
-func ReportPeers_Go(ws *websocket.Conn) {
-    // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Go Client: %s\n", msg[:n])
-    // Retrieve Peers
-    var Peer string
-    if (IDList[0] == string(msg[:n])) {
-        Peer = IDList[1]
-    } else {
-        Peer = IDList[0]
-    }
-    // Report Peer List to Go Client
-    if _, err := ws.Write([]byte(Peer)); err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Your peer's websocket is at port %s\n",Peer)
+        JSClientCount += 1
     }
 }
 
@@ -87,9 +63,8 @@ func main() {
     fmt.Printf("Issuing ports at ws://localhost:8080/ws\n")
 
     http.Handle("/", http.FileServer(http.Dir("./go/src/WeTubeClient/")))
-    http.Handle("/ws/go/init", websocket.Handler(IssuePort_Go))
+    http.Handle("/ws/go", websocket.Handler(IssuePort_Go))
     http.Handle("/ws/js", websocket.Handler(IssuePort_JS))
-    http.Handle("/ws/go/peer", websocket.Handler(ReportPeers_Go))
 
     err := http.ListenAndServe(":8080", nil)
     if err != nil {

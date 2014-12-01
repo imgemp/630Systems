@@ -1,5 +1,5 @@
 /// <reference path="youtube.d.ts" />
-/// <reference path="PlayerControls.ts" />
+// / <reference path="PlayerControls.ts" />
 // This just adds a youtube iframe to the div in the html
 // 2. This code loads the IFrame Player API code asynchronously.
 var tag = document.createElement('script');
@@ -22,24 +22,61 @@ function onYouTubeIframeAPIReady() {
             'onStateChange': onPlayerStateChange
         }
     });
+    console.log("Player Ready");
 }
 // 4. The API will call this function when the video player is ready.
 function onPlayerReady(event) {
-    event.target.playVideo();
+    // event.target.playVideo();
 }
 // 5. The API calls this function when the player's state changes.
 //    The function indicates that when playing a video (state=1),
 //    the player should play for six seconds and then stop.
 var done = false;
 function onPlayerStateChange(event) {
-    if (event.data == YT.PlayerState.PLAYING && !done) {
-        setTimeout(stopVideo, 6000);
-        done = true;
-    }
+    // if (event.data == YT.PlayerState.PLAYING && !done) {
+    //   setTimeout(stopVideo, 6000);
+    //   done = true;
+    // }
+}
+function playVideo() {
+    player.playVideo();
+    // sendToWebSocket(myLocalWebSocketAddr,"Play");
+}
+function pauseVideo() {
+    player.pauseVideo();
+    // sendToWebSocket(myLocalWebSocketAddr,"Pause");
+}
+function stopVideo() {
+    player.stopVideo();
+    var msg = {
+        command: "Stop",
+        argument: null
+    };
+    var json_msg = JSON.stringify(msg);
+    sendToWebSocket(myLocalWebSocketAddr, json_msg);
+}
+function seekTo(seconds) {
+    player.seekTo(seconds, true);
+    // sendToWebSocket(myLocalWebSocketAddr,"SeekTo");
 }
 console.log("Starting WeTubeClient (JS)");
+// Create New Websocket
+function sendToWebSocket(addr, m) {
+    var ws = new WebSocket(addr, "protocolOne");
+    ws.onopen = function (event) {
+        ws.send(m);
+        console.log(m);
+    };
+    ws.onmessage = function (event) {
+        console.log("Go Client: " + event.data);
+    };
+    ws.onclose = function (event) {
+        console.log("Websocket closing...");
+    };
+}
 // Establish WebSocket Connection with WeTube (Go) Client
-var myLocalWebSocket;
+var myLocalWebSocketAddr;
+// var myLocalWebSocket: WebSocket;
 var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 tempWebSocket.onopen = function (event) {
     tempWebSocket.send("Which port should I use?");
@@ -48,13 +85,7 @@ tempWebSocket.onopen = function (event) {
 tempWebSocket.onmessage = function (event) {
     console.log("WeTubeServer: Use port " + event.data);
     console.log("Connecting to websocket at ws://localhost:" + event.data + "/ws");
-    myLocalWebSocket = new WebSocket("ws://localhost:" + event.data + "/ws", "protocolOne");
-    myLocalWebSocket.onopen = function (event) {
-        console.log("Hello, Go Client!");
-        myLocalWebSocket.send("Hello, Go Client!");
-    };
-    myLocalWebSocket.onmessage = function (event) {
-        console.log("Go Client: " + event.data);
-    };
+    myLocalWebSocketAddr = "ws://localhost:" + event.data + "/ws";
+    sendToWebSocket(myLocalWebSocketAddr, "Hello, Go Client!");
     tempWebSocket.close();
 };
