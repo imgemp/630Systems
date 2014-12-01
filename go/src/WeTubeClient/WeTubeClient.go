@@ -415,6 +415,7 @@ func broadcast(m Message) {
     }
 }
 
+// DIAL FUNCTION NEEDS WORK
 func dial(addr string) {
     if addr == myP2PSocketAddr {
         return // Don't try to dial self.
@@ -450,7 +451,7 @@ func dial(addr string) {
             return
         }
     }
-    newInput = false
+    // newInput = false
     // fmt.Println("Done Encoding")
 }
 
