@@ -26,7 +26,12 @@ var (
     myP2PSocketAddr string
     // count int // FOR TESTING
     // newInput bool // FOR TESTING
+    PeerSet map[string]int
 )
+
+const VIEWER int = 0
+const EDITOR int = 1
+const MASTER int = 2
 
 // Ping Server Websocket for Ports AND PEER LIST WITH PERMISSIONS FOR EACH PEER (PASS AS JSON OBJECT)
 func RetrieveSockets() {
@@ -62,6 +67,31 @@ func RetrieveSockets() {
     fmt.Printf("WeTubeServer: Use port %s and %s\n",strconv.Itoa(localPort),strconv.Itoa(p2pPort))
 }
 
+func RetrievePeerSet() {
+    url := "ws://localhost:8080/ws/go/peer"
+    ws, err := websocket.Dial(url, "", origin)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if _, err = ws.Write([]byte(myP2PSocketAddr)); err != nil {
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Who are the peers? (myP2PSocketAddr: %s)\n",myP2PSocketAddr)
+    }
+
+    // Retrieve Peer Set from Websocket
+    d := json.NewDecoder(ws)
+    err = d.Decode(&PeerSet)
+    if err != nil {
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Received Peer Set\n")
+        for key, value := range PeerSet {
+            fmt.Println("Key:", key, "Value:", value)
+        }
+    }
+}
+
 func ClientHandler(ws *websocket.Conn) {
     ClientRelay(ws)
 }
@@ -75,16 +105,31 @@ func ClientRelay(ws *websocket.Conn) {
     if n, err = ws.Read(msg); err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("JS Client: %s.\n", msg[:n])
+    fmt.Printf("JS Client: %s\n", msg[:n])
     // ATTACH PEER LIST TO ALL RELAY MESSAGES
     var s string = string(msg[:n])
-    m := Message{
-        ID:   RandomID(),
-        Addr: myP2PSocketAddr,
-        Body: s,
+    // IF MESSAGE == "Who are my peers?" then respond with peer list else broadcast message
+    if (s == "Who are my peers?") {
+        e := json.NewEncoder(ws)
+        for key, value := range PeerSet {
+            fmt.Println("Key:", key, "Value:", value)
+        }
+        err = e.Encode(PeerSet)
+        if err != nil {
+            log.Fatal(err)
+        } else {
+            fmt.Printf("Peer Set Sent\n")
+        }
+    } else {
+        m := Message{
+            ID:   RandomID(),
+            Addr: myP2PSocketAddr,
+            Body: s,
+            Peers: PeerSet,
+        }
+        Seen(m.ID)
+        broadcast(m)
     }
-    Seen(m.ID)
-    broadcast(m)
 
     // if _, err := ws.Write([]byte("Hello to you too!")); err != nil {
     //     log.Fatal(err)
@@ -350,6 +395,7 @@ type Message struct {
     ID   string
     Addr string
     Body string
+    Peers map[string]int
 }
 
 var peers = &Peers{m: make(map[string]chan<- Message)}
@@ -475,6 +521,7 @@ func main() {
 
     // ONLY FOR TESTING
     RetrieveSockets()
+    RetrievePeerSet()
 
     // Listen at Peer Socket
     fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocketAddr)

@@ -68,7 +68,9 @@ function sendToWebSocket(addr, m) {
         console.log(m);
     };
     ws.onmessage = function (event) {
-        console.log("Go Client: " + event.data);
+        var msg = JSON.parse(event.data);
+        console.log("Go Client: " + event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
+        console.log(msg);
     };
     ws.onclose = function (event) {
         console.log("Websocket closing...");
@@ -86,6 +88,6 @@ tempWebSocket.onmessage = function (event) {
     console.log("WeTubeServer: Use port " + event.data);
     console.log("Connecting to websocket at ws://localhost:" + event.data + "/ws");
     myLocalWebSocketAddr = "ws://localhost:" + event.data + "/ws";
-    sendToWebSocket(myLocalWebSocketAddr, "Hello, Go Client!");
+    sendToWebSocket(myLocalWebSocketAddr, "Who are my peers?");
     tempWebSocket.close();
 };
