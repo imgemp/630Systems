@@ -9,8 +9,11 @@ import (
     "strings"
     "strconv"
     // "errors"
-    "encoding/binary"
-    "bytes"
+    // "encoding/binary"
+    // "bytes"
+    "encoding/json"
+    "crypto/rand"
+    "sync"
 )
 
 // Global Variables
@@ -20,10 +23,9 @@ var (
     p2pPort int
     myLocalWebsocket string
     myP2PSocket string
+    count int // FOR TESTING
+    newInput bool // FOR TESTING
 )
-// var localChannel chan int
-var p2pChannel chan int32
-var count int32
 
 // Ping Server Websocket for Ports
 func RetrieveSockets() {
@@ -158,175 +160,274 @@ func ClientRelay(ws *websocket.Conn) {
 //     p2pChannel <- count
 // }
 
-func servePeer(c net.Conn) {
-    fmt.Printf("<%saccepted connection",c.RemoteAddr())
-    // Read count
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = c.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Peer: %s\n", msg[:n])
-    buf := bytes.NewBuffer(msg[:n])
-    binary.Read(buf, binary.LittleEndian, &count)
-    fmt.Printf("Peer: Count is %d\n",count)
-    // Increment Count
-    count += 1
-    err = binary.Write(buf, binary.LittleEndian, count)
-    if err != nil {
-        fmt.Println("binary.Write failed:", err)
-    }
-    // Redial Peer
-    var addr string = "localhost:12348"
-    if (p2pPort == 12348) {
-        addr = "localhost:12346"
-    }
-    fmt.Printf("Dialing peer's socket at %s\n",addr)
-    c, err = net.Dial("tcp",addr)
-    if err != nil {
-        fmt.Printf("Peer's socket not ready!\n")
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Dial successful!\n")
-    }
-    // Write to socket
-    if _, err := c.Write(buf.Bytes()); err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Count is %d\n",count)
-    }
-    c.Close()
-    fmt.Printf("<%sclosed\n",c.RemoteAddr())
-}
+// func servePeer(c net.Conn) {
+//     fmt.Printf("<%saccepted connection",c.RemoteAddr())
+//     // Read count
+//     var msg = make([]byte, 512)
+//     var n int
+//     var err error
+//     if n, err = c.Read(msg); err != nil {
+//         log.Fatal(err)
+//     }
+//     fmt.Printf("Peer: %s\n", msg[:n])
+//     buf := bytes.NewBuffer(msg[:n])
+//     binary.Read(buf, binary.LittleEndian, &count)
+//     fmt.Printf("Peer: Count is %d\n",count)
+//     // Increment Count
+//     count += 1
+//     err = binary.Write(buf, binary.LittleEndian, count)
+//     if err != nil {
+//         fmt.Println("binary.Write failed:", err)
+//     }
+//     // Redial Peer
+//     var addr string = "localhost:12348"
+//     if (p2pPort == 12348) {
+//         addr = "localhost:12346"
+//     }
+//     fmt.Printf("Dialing peer's socket at %s\n",addr)
+//     c, err = net.Dial("tcp",addr)
+//     if err != nil {
+//         fmt.Printf("Peer's socket not ready!\n")
+//         log.Fatal(err)
+//     } else {
+//         fmt.Printf("Dial successful!\n")
+//     }
+//     // Write to socket
+//     if _, err := c.Write(buf.Bytes()); err != nil {
+//         log.Fatal(err)
+//     } else {
+//         fmt.Printf("Count is %d\n",count)
+//     }
+//     c.Close()
+//     fmt.Printf("<%sclosed\n",c.RemoteAddr())
+// }
+
+// func startComm() {
+//     // Test by Incrementing Count back and forth
+//     count = 0
+//     if (p2pPort == 12348) {
+//         // Convert count to binary
+//         buf := new(bytes.Buffer)
+//         err := binary.Write(buf, binary.LittleEndian, count)
+//         if err != nil {
+//             fmt.Println("binary.Write failed:", err)
+//         }
+//         // Dial Peer
+//         var addr string = "localhost:12346"
+//         fmt.Printf("Dialing peer's socket at %s\n",addr)
+//         c, err := net.Dial("tcp",addr)
+//         if err != nil {
+//             fmt.Printf("Peer's socket not ready!\n")
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("Dial successful!\n")
+//         }
+//         // Write to socket
+//         if _, err := c.Write(buf.Bytes()); err != nil {
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("Count is %d\n",count)
+//         }
+//     }
+// }
 
 func startComm() {
     // Test by Incrementing Count back and forth
     count = 0
+    newInput = true
     if (p2pPort == 12348) {
-        // Convert count to binary
-        buf := new(bytes.Buffer)
-        err := binary.Write(buf, binary.LittleEndian, count)
-        if err != nil {
-            fmt.Println("binary.Write failed:", err)
-        }
-        // Dial Peer
         var addr string = "localhost:12346"
+        // ch := make(chan<- Message)
+        // peers.m[addr] = ch
+        // Add count to channels
+        go readInput()
+        // Dial Peer
         fmt.Printf("Dialing peer's socket at %s\n",addr)
-        c, err := net.Dial("tcp",addr)
+        go dial(addr)
+    }
+}
+
+func servePeer(c net.Conn) {
+    log.Println("<", c.RemoteAddr(), "accepted connection")
+    d := json.NewDecoder(c)
+    for {
+        var m Message
+        // fmt.Println("decoding message")
+        err := d.Decode(&m)
         if err != nil {
-            fmt.Printf("Peer's socket not ready!\n")
-            log.Fatal(err)
-        } else {
-            fmt.Printf("Dial successful!\n")
+            log.Println("<", c.RemoteAddr(), "error:", err)
+            break
         }
-        // Write to socket
-        if _, err := c.Write(buf.Bytes()); err != nil {
-            log.Fatal(err)
-        } else {
-            fmt.Printf("Count is %d\n",count)
+        if Seen(m.ID) {
+            continue
+        }
+        log.Printf("< %v received: %v", c.RemoteAddr(), m)
+        fmt.Println(m.Body)
+        // Intercept message and increment count - FOR TESTING
+        var body string = m.Body
+        count, err = strconv.Atoi(body)
+        if err != nil {
+            log.Println("string to int error line 266")
+        }
+        count = count + 1
+        newInput = true
+        // Broadcast
+        broadcast(m)
+        go dial(m.Addr)
+    }
+    c.Close()
+    log.Println("<", c.RemoteAddr(), "close")
+}
+
+// RandomID returns an 8 byte random string in hexadecimal.
+func RandomID() string {
+    b := make([]byte, 8)
+    n, _ := rand.Read(b)
+    return fmt.Sprintf("%x", b[:n])
+}
+
+// needs to take input from JS Client, just testing now
+func readInput() {
+    for {
+        if newInput {
+            s := strconv.Itoa(count)
+            // fmt.Printf("Count String is %s\n",s)
+            m := Message{
+                ID:   RandomID(),
+                Addr: myP2PSocket,
+                Body: s,
+            }
+            // fmt.Printf("Count String is now %s\n",m.Body)
+            Seen(m.ID)
+            broadcast(m)
+            // fmt.Println("done broadcasting original message")
         }
     }
 }
 
-// type Message struct {
-//     ID   string
-//     Addr string
-//     Body string
-// }
+type Message struct {
+    ID   string
+    Addr string
+    Body string
+}
 
-// var peers = &Peers{m: make(map[string]chan<- Message)}
+var peers = &Peers{m: make(map[string]chan<- Message)}
 
-// type Peers struct {
-//     m  map[string]chan<- Message
-//     mu sync.RWMutex
-// }
+type Peers struct {
+    m  map[string]chan<- Message // receive-only channels
+    mu sync.RWMutex
+}
+
+func (p *Peers) Add(addr string) <-chan Message {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    if _, ok := p.m[addr]; ok {
+        return nil
+    }
+    ch := make(chan Message)
+    p.m[addr] = ch
+    return ch
+}
+
+// chan<- is receive only
+// <-chan is send only
 
 // func (p *Peers) Add(addr string) <-chan Message {
 //     p.mu.Lock()
 //     defer p.mu.Unlock()
 //     if _, ok := p.m[addr]; ok {
-//         return nil
+//         ch := make(chan Message)
+//         var m Message
+//         m = <- p.m[addr]
+//         ch <- m
+//         return ch
 //     }
 //     ch := make(chan Message)
 //     p.m[addr] = ch
 //     return ch
 // }
 
-// func (p *Peers) Remove(addr string) {
-//     p.mu.Lock()
-//     defer p.mu.Unlock()
-//     delete(p.m, addr)
-// }
+func (p *Peers) Remove(addr string) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    delete(p.m, addr)
+}
 
-// func (p *Peers) List() []chan<- Message {
-//     p.mu.RLock()
-//     defer p.mu.RUnlock()
-//     l := make([]chan<- Message, 0, len(p.m))
-//     for _, ch := range p.m {
-//         l = append(l, ch)
-//     }
-//     return l
-// }
+func (p *Peers) List() []chan<- Message {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    l := make([]chan<- Message, 0, len(p.m))
+    for _, ch := range p.m {
+        l = append(l, ch)
+    }
+    return l
+}
 
-// func broadcast(m Message) {
-//     for _, ch := range peers.List() {
-//         select {
-//         case ch <- m:
-//         default:
-//             // Okay to drop messages sometimes.
-//         }
-//     }
-// }
+func broadcast(m Message) {
+    for _, ch := range peers.List() {
+        // fmt.Println("adding message to peer channels")
+        select {
+        case ch <- m:
+        default:
+            // Okay to drop messages sometimes.
+        }
+    }
+}
 
-// func dial(addr string) {
-//     if addr == self {
-//         return // Don't try to dial self.
-//     }
+func dial(addr string) {
+    if addr == myP2PSocket {
+        return // Don't try to dial self.
+    }
 
-//     ch := peers.Add(addr)
-//     if ch == nil {
-//         return // Peer already connected.
-//     }
-//     defer peers.Remove(addr)
+    ch := peers.Add(addr)
+    if ch == nil {
+        return // Peer already connected.
+    }
+    defer peers.Remove(addr)
+    // ch := peers.m[addr]
 
-//     log.Println(">", addr, "dialling")
-//     c, err := net.Dial("tcp", addr)
-//     if err != nil {
-//         log.Println(">", addr, "dial error:", err)
-//         return
-//     }
-//     log.Println(">", addr, "connected")
-//     defer func() {
-//         c.Close()
-//         log.Println(">", addr, "closed")
-//     }()
+    log.Println(">", addr, "dialing")
+    c, err := net.Dial("tcp", addr)
+    if err != nil {
+        log.Println(">", addr, "dial error:", err)
+        return
+    }
+    log.Println(">", addr, "connected")
+    defer func() {
+        c.Close()
+        log.Println(">", addr, "closed")
+    }()
 
-//     e := json.NewEncoder(c)
-//     for m := range ch {
-//         err := e.Encode(m)
-//         if err != nil {
-//                 log.Println(">", addr, "error:", err)
-//                 return
-//         }
-//     }
-// }
+    e := json.NewEncoder(c)
+    // fmt.Println("Encoding")
+    for m := range ch {
+        // fmt.Println("got here")
+        // fmt.Printf("message is:%s",m)
+        err := e.Encode(m)
+        if err != nil {
+            log.Println(">", addr, "error:", err)
+            return
+        }
+    }
+    newInput = false
+    // fmt.Println("Done Encoding")
+}
 
-// var seenIDs = struct {
-//     m map[string]bool
-//     sync.Mutex
-// }{m: make(map[string]bool)}
+var seenIDs = struct {
+    m map[string]bool
+    sync.Mutex
+}{m: make(map[string]bool)}
 
-// func Seen(id string) bool {
-//     if !*dedup || id == "" {
-//         return false
-//     }
-//     seenIDs.Lock()
-//     ok := seenIDs.m[id]
-//     seenIDs.m[id] = true
-//     seenIDs.Unlock()
-//     return ok
-// }
+func Seen(id string) bool {
+    if id == "" {
+        return false
+    }
+    seenIDs.Lock()
+    ok := seenIDs.m[id]
+    seenIDs.m[id] = true
+    seenIDs.Unlock()
+    return ok
+}
 
 func main() {
 
