@@ -1,17 +1,24 @@
+/// <reference path="WeTubeClient.ts" />
+
 // PlayerControls
 
 function playVideo(): void {
-  player.playVideo();
+	player.playVideo();
+	myLocalWebSocket.send("Play");
 }
 
 function pauseVideo(): void {
-  player.pauseVideo();
+	player.pauseVideo();
+	myLocalWebSocket.send("Pause");
 }
 
 function stopVideo(): void {
-  player.stopVideo();
+	player.stopVideo();
+	console.log("Stopping")
+	myLocalWebSocket.send("Stop");
 }
 
 function seekTo(seconds: number): void {
 	player.seekTo(seconds,true);
+	myLocalWebSocket.send("SeekTo");
 }

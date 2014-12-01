@@ -21,13 +21,14 @@ var (
     origin string = "http://localhost/"
     localPort int
     p2pPort int
-    myLocalWebsocket string
-    myP2PSocket string
-    count int // FOR TESTING
-    newInput bool // FOR TESTING
+    // myLocalWebsocket websocket.Conn
+    myLocalWebsocketAddr string
+    myP2PSocketAddr string
+    // count int // FOR TESTING
+    // newInput bool // FOR TESTING
 )
 
-// Ping Server Websocket for Ports
+// Ping Server Websocket for Ports AND PEER LIST WITH PERMISSIONS FOR EACH PEER (PASS AS JSON OBJECT)
 func RetrieveSockets() {
     url := "ws://localhost:8080/ws/go"
     tempWS, err := websocket.Dial(url, "", origin)
@@ -54,11 +55,15 @@ func RetrieveSockets() {
     var temp []string
     temp = append(empty,":")
     temp = append(temp,strconv.Itoa(localPort))
-    myLocalWebsocket = strings.Join(temp,"")
+    myLocalWebsocketAddr = strings.Join(temp,"")
     temp = append(empty,":")
     temp = append(temp,strconv.Itoa(p2pPort))
-    myP2PSocket = strings.Join(temp,"")
+    myP2PSocketAddr = strings.Join(temp,"")
     fmt.Printf("WeTubeServer: Use port %s and %s\n",strconv.Itoa(localPort),strconv.Itoa(p2pPort))
+}
+
+func ClientHandler(ws *websocket.Conn) {
+    ClientRelay(ws)
 }
 
 // Relay the data received on the WebSocket.
@@ -71,14 +76,38 @@ func ClientRelay(ws *websocket.Conn) {
         log.Fatal(err)
     }
     fmt.Printf("JS Client: %s.\n", msg[:n])
-    // Relay Message to Peers
-    // Receive Message from Peers
-    // Respond with Message
-    if _, err := ws.Write([]byte("Hello to you too!")); err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Hello to you too!\n")
+    // ATTACH PEER LIST TO ALL RELAY MESSAGES
+    var s string = string(msg[:n])
+    m := Message{
+        ID:   RandomID(),
+        Addr: myP2PSocketAddr,
+        Body: s,
     }
+    Seen(m.ID)
+    broadcast(m)
+
+    // if _, err := ws.Write([]byte("Hello to you too!")); err != nil {
+    //     log.Fatal(err)
+    // } else {
+    //     fmt.Printf("Hello to you too!\n")
+    // }
+
+
+    // for {
+    //     if newInput {
+    //         s := strconv.Itoa(count)
+    //         // fmt.Printf("Count String is %s\n",s)
+    //         m := Message{
+    //             ID:   RandomID(),
+    //             Addr: myP2PSocketAddr,
+    //             Body: s,
+    //         }
+    //         // fmt.Printf("Count String is now %s\n",m.Body)
+    //         Seen(m.ID)
+    //         broadcast(m)
+    //         // fmt.Println("done broadcasting original message")
+    //     }
+    // }
 }
 
 // Relay the data received on the WebSocket.
@@ -231,21 +260,21 @@ func ClientRelay(ws *websocket.Conn) {
 //     }
 // }
 
-func startComm() {
-    // Test by Incrementing Count back and forth
-    count = 0
-    newInput = true
-    if (p2pPort == 12348) {
-        var addr string = "localhost:12346"
-        // ch := make(chan<- Message)
-        // peers.m[addr] = ch
-        // Add count to channels
-        go readInput()
-        // Dial Peer
-        fmt.Printf("Dialing peer's socket at %s\n",addr)
-        go dial(addr)
-    }
-}
+// func startComm() {
+//     // Test by Incrementing Count back and forth
+//     count = 0
+//     newInput = true
+//     if (p2pPort == 12348) {
+//         var addr string = "localhost:12346"
+//         // ch := make(chan<- Message)
+//         // peers.m[addr] = ch
+//         // Add count to channels
+//         go readInput()
+//         // Dial Peer
+//         fmt.Printf("Dialing peer's socket at %s\n",addr)
+//         go dial(addr)
+//     }
+// }
 
 func servePeer(c net.Conn) {
     log.Println("<", c.RemoteAddr(), "accepted connection")
@@ -263,14 +292,26 @@ func servePeer(c net.Conn) {
         }
         log.Printf("< %v received: %v", c.RemoteAddr(), m)
         fmt.Println(m.Body)
+
+        // Write body to websocket
+        // fmt.Println("writing to websocket")
+        // myLocalWebsocket, err := websocket.Dial(myLocalWebsocketAddr, "", origin)
+        // if err != nil {
+        //     log.Fatal(err)
+        // }
+        // if _, err = myLocalWebsocket.Write([]byte(string(m.Body))); err != nil {
+        //     log.Fatal(err)
+        // } else {
+        //     fmt.Printf("Wrote to websocket: %s\n",m.Body)
+        // }
         // Intercept message and increment count - FOR TESTING
-        var body string = m.Body
-        count, err = strconv.Atoi(body)
-        if err != nil {
-            log.Println("string to int error line 266")
-        }
-        count = count + 1
-        newInput = true
+        // var body string = m.Body
+        // count, err = strconv.Atoi(body)
+        // if err != nil {
+        //     log.Println("string to int error line 266")
+        // }
+        // count = count + 1
+        // newInput = true
         // Broadcast
         broadcast(m)
         go dial(m.Addr)
@@ -287,23 +328,23 @@ func RandomID() string {
 }
 
 // needs to take input from JS Client, just testing now
-func readInput() {
-    for {
-        if newInput {
-            s := strconv.Itoa(count)
-            // fmt.Printf("Count String is %s\n",s)
-            m := Message{
-                ID:   RandomID(),
-                Addr: myP2PSocket,
-                Body: s,
-            }
-            // fmt.Printf("Count String is now %s\n",m.Body)
-            Seen(m.ID)
-            broadcast(m)
-            // fmt.Println("done broadcasting original message")
-        }
-    }
-}
+// func readInput() {
+//     for {
+//         if newInput {
+//             s := strconv.Itoa(count)
+//             // fmt.Printf("Count String is %s\n",s)
+//             m := Message{
+//                 ID:   RandomID(),
+//                 Addr: myP2PSocketAddr,
+//                 Body: s,
+//             }
+//             // fmt.Printf("Count String is now %s\n",m.Body)
+//             Seen(m.ID)
+//             broadcast(m)
+//             // fmt.Println("done broadcasting original message")
+//         }
+//     }
+// }
 
 type Message struct {
     ID   string
@@ -375,7 +416,7 @@ func broadcast(m Message) {
 }
 
 func dial(addr string) {
-    if addr == myP2PSocket {
+    if addr == myP2PSocketAddr {
         return // Don't try to dial self.
     }
 
@@ -435,8 +476,8 @@ func main() {
     RetrieveSockets()
 
     // Listen at Peer Socket
-    fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocket)
-    l, err := net.Listen("tcp",myP2PSocket)
+    fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocketAddr)
+    l, err := net.Listen("tcp",myP2PSocketAddr)
     if err != nil {
         log.Fatal(err)
     }
@@ -454,14 +495,12 @@ func main() {
         }
     }()
 
-    go startComm()
-
     // Create Client Websocket Handler
-    http.Handle("/ws", websocket.Handler(ClientRelay))
+    http.Handle("/ws", websocket.Handler(ClientHandler))
 
     // Listen at Client Websocket
-    fmt.Printf("Listening for JS Client at ws://localhost%s/ws\n", myLocalWebsocket)
-    err = http.ListenAndServe(myLocalWebsocket, nil)
+    fmt.Printf("Listening for JS Client at ws://localhost%s/ws\n", myLocalWebsocketAddr)
+    err = http.ListenAndServe(myLocalWebsocketAddr, nil)
     if err != nil {
         panic("ListenAndServe: " + err.Error())
     }
