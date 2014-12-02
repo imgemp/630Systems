@@ -14,6 +14,7 @@ import (
     "encoding/json"
     "crypto/rand"
     "sync"
+    "time"
 )
 
 // Global Variables
@@ -109,15 +110,25 @@ func AnswerClient(ws *websocket.Conn) {
     var s string = string(msg[:n])
     if (s == "Who are my peers?") {
         // Respond with peers
+        duration := time.Duration(2)*time.Second
+        time.Sleep(duration)
         e := json.NewEncoder(ws)
+        fmt.Println("Creating encoder")
+        time.Sleep(duration)
+        duration = time.Duration(2)*time.Second
         for addr, rank := range myPeerInfo.m {
             fmt.Println("Addr:", addr, "Rank:", rank)
         }
         err = e.Encode(myPeerInfo.m)
+        fmt.Println("Actually encoding")
+        time.Sleep(duration)
+        duration = time.Duration(4)*time.Second
         if err != nil {
             log.Fatal(err)
         } else {
             fmt.Printf("Peer Info Sent\n")
+            time.Sleep(duration)
+            duration = time.Duration(2)*time.Second
         }
         // Alert peers to client's existence
         // create message with command: Mote, arg_str: client's address, arg_int: PeerInfo.m
