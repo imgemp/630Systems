@@ -129,7 +129,7 @@ func AnswerClient(ws *websocket.Conn) {
             PI: myPeerInfo.m,
         }
         Seen(m.ID)
-        fmt.Println("About to broadcast")
+        fmt.Printf("About to broadcast: %s\n",m)
         go broadcast(m)
         fmt.Println("Message broadcasted")
         for addr, _ := range myPeerChans.m {
@@ -170,6 +170,7 @@ func DialClient(msg Message) {
     var temp []string
     temp = append(temp,"ws://localhost")
     temp = append(temp,myLocalWebsocketAddr)
+    temp = append(temp,"/ws")
     var wsaddr string = strings.Join(temp,"")
     ws, err := websocket.Dial(wsaddr, "", origin)
     if err != nil {
@@ -232,9 +233,12 @@ func (p *PeerChans) List() []chan Message {
     p.mu.RLock()
     defer p.mu.RUnlock()
     l := make([]chan Message, 0, len(p.m))
-    for _, ch := range p.m {
-        l = append(l, ch)
+    for addr, ch := range p.m {
+        if addr != myP2PSocketAddr {
+            l = append(l, ch)
+        }
     }
+    fmt.Println("Return PeerChans List")
     return l
 }
 
