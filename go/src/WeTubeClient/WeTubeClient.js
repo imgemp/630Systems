@@ -47,7 +47,7 @@ function pauseVideo() {
     // sendToWebSocket(myLocalWebSocketAddr,"Pause");
 }
 function stopVideo() {
-    player.stopVideo();
+    // player.stopVideo();
     var msg = {
         command: "Stop",
         argument: null
@@ -70,7 +70,6 @@ function sendToWebSocket(addr, m) {
     ws.onmessage = function (event) {
         var msg = JSON.parse(event.data);
         console.log("Go Client: " + event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-        console.log(msg);
     };
     ws.onclose = function (event) {
         console.log("Websocket closing...");

@@ -8,6 +8,7 @@ import (
     "strconv"
     // "time"
     "encoding/json"
+    "sync"
 )
 
 const VIEWER int = 0
@@ -15,7 +16,19 @@ const EDITOR int = 1
 const MASTER int = 2
 
 // Peer Map
-var PeerSet = make(map[string]int) // Map of Peer IDs to Permission Levels
+var myPeerInfo = &PeerInfo{m: make(map[string]int)} // Map of Peer IDs to Permission Levels
+
+type PeerInfo struct {
+    m  map[string]int
+    mu sync.RWMutex
+}
+
+// type Message struct {
+//     ID   string
+//     Addr string
+//     Body string
+//     PI map[string]int
+// }
 
 // ONLY FOR TESTING
 // Issue new ports (internal and external websockets) to the Go Client
@@ -73,20 +86,20 @@ func IssuePeerSet_Go(ws *websocket.Conn) {
     }
     fmt.Printf("Go Client: %s\n", msg[:n])
     // Add Peer's Address to Peer Set (if len(map) == 0, master, else, viewer by default)
-    if len(PeerSet) == 0 {
+    if len(myPeerInfo.m) == 0 {
         fmt.Printf("Issue as Master\n")
-        PeerSet[string(msg[:n])] = MASTER
+        myPeerInfo.m[string(msg[:n])] = MASTER
     } else {
-        PeerSet[string(msg[:n])] = VIEWER
+        myPeerInfo.m[string(msg[:n])] = MASTER
     }
     // Issue Peer Set to Go Client
     e := json.NewEncoder(ws)
-    err = e.Encode(PeerSet)
+    err = e.Encode(myPeerInfo.m)
     if err != nil {
         log.Fatal(err)
     } else {
         fmt.Printf("Peer Set Sent\n")
-        for key, value := range PeerSet {
+        for key, value := range myPeerInfo.m {
             fmt.Println("Key:", key, "Value:", value)
         }
     }

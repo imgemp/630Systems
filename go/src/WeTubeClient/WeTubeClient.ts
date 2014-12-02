@@ -57,10 +57,11 @@ function pauseVideo(): void {
 }
 
 function stopVideo(): void {
-  player.stopVideo();
+  // player.stopVideo();
   var msg = {
     command: "Stop",
-    argument: null
+    arg_str: null,
+    arg_int: null,
   };
   var json_msg = JSON.stringify(msg)
   sendToWebSocket(myLocalWebSocketAddr,json_msg);
