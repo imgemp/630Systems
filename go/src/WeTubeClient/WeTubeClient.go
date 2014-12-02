@@ -176,6 +176,8 @@ func DialClient(msg Message) {
     if err != nil {
         fmt.Println("Error dialing client")
         log.Fatal(err)
+    } else {
+        fmt.Printf("Dial succesful: %s\n",wsaddr)
     }
     e := json.NewEncoder(ws)
     err = e.Encode(msg)
