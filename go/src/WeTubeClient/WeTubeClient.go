@@ -97,6 +97,72 @@ func RetrievePeerInfo() {
     }
 }
 
+var fromClient chan Command
+var toClient chan Command
+
+type Command struct {
+    Action string
+    Argument string
+    Target string
+}
+
+// Serve JS Client WebSocket Connection
+func ServeClient(ws *websocket.Conn) {
+    fromClient = make(chan Command)
+    toClient = make(chan Command)
+    func() {
+        for {
+            go ReceiveFromClient(ws)
+            go SendToClient(ws)
+            go ReceiveFromPeer()
+            go SendToPeer()
+        }
+    }()
+    fmt.Println("Closing Client WebSocket Connection...")
+}
+
+func ReceiveFromClient(ws *websocket.Conn) {
+    d := json.NewDecoder(ws)
+    var cmd Command
+    err := d.Decode(&cmd)
+    if err != nil {
+        log.Fatal(err)
+    } else {
+        fromClient <- cmd
+        fmt.Println("Received Message")
+        fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+        fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+        fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+    }
+}
+
+func SendToClient(ws *websocket.Conn) {
+    cmd := <-toClient
+    e := json.NewEncoder(ws)
+    err := e.Encode(cmd)
+    if err != nil {
+        log.Fatal(err)
+    } else {
+        fmt.Printf("Sent Message: %s\n",cmd)
+    }
+}
+
+func ReceiveFromPeer() {
+    // read msg from peer socket
+    // convert to command cmd
+    // toClient <- cmd
+}
+
+func SendToPeer() {
+    cmd := <-fromClient
+    fmt.Println("Took Command Off fromClient Channel")
+    fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+    fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+    fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+    // convert to message
+    // send to peers
+}
+
 // Relay the data received on the WebSocket.
 func AnswerClient(ws *websocket.Conn) {
     // Receive Message
@@ -362,7 +428,7 @@ func main() {
     }()
 
     // Create Client Websocket Handler
-    http.Handle("/ws", websocket.Handler(AnswerClient))
+    http.Handle("/ws", websocket.Handler(ServeClient))
 
     // Listen at Client Websocket
     fmt.Printf("Listening for JS Client at ws://localhost%s/ws\n", myLocalWebsocketAddr)

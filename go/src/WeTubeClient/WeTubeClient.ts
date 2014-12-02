@@ -48,120 +48,67 @@ function onPlayerStateChange(event) {
 
 function playVideo(): void {
   player.playVideo();
-  // sendToWebSocket(myLocalWebSocketAddr,"Play");
+  var cmd = {
+    Action: "Play",
+    Argument: null,
+    Target: null,
+  };
+  ws.send(JSON.stringify(cmd));
 }
 
 function pauseVideo(): void {
   player.pauseVideo();
-  // sendToWebSocket(myLocalWebSocketAddr,"Pause");
+  var cmd = {
+    Action: "Pause",
+    Argument: null,
+    Target: null,
+  };
+  ws.send(JSON.stringify(cmd));
 }
 
 function stopVideo(): void {
-  // player.stopVideo();
-  var msg = {
-    command: "Stop",
-    arg_str: null,
-    arg_int: null,
+  player.stopVideo();
+  var cmd = {
+    Action: "Stop",
+    Argument: null,
+    Target: null,
   };
-  var json_msg = JSON.stringify(msg)
-  sendToWebSocket(myLocalWebSocketAddr,json_msg);
+  ws.send(JSON.stringify(cmd));
 }
 
 function seekTo(seconds: number): void {
   player.seekTo(seconds,true);
-  // sendToWebSocket(myLocalWebSocketAddr,"SeekTo");
+  var cmd = {
+    Action: "SeekTo",
+    Argument: seconds.toString(),
+    Target: null,
+  };
+  ws.send(JSON.stringify(cmd));
 }
 
-console.log("Starting WeTubeClient (JS)")
+console.log("Starting WeTubeClient (JS)");
 
-// Send Command to Client Websocket
-function sendToWebSocket(addr: string,m: string) {
-    var ws = new WebSocket(addr, "protocolOne");
+// Dial Client Websocket
+function DialWebSocket(addr: string) {
+    ws = new WebSocket(addr, "protocolOne");
     ws.onopen = function (event) {
-      ws.send(m);
-      console.log(m);
+      var cmd = {Action: "Who are my peers?", Argument: null, Target: null};
+      ws.send(JSON.stringify(cmd));
+      console.log(cmd);
     };
     ws.onmessage = function (event) {
-      var msg = JSON.parse(event.data)
+      var cmd = JSON.parse(event.data)
       console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
     }
     ws.onclose = function (event) {
-      console.log("WebSocket closing 1...",event.code,event.reason);
+      console.log("WebSocket closing...",event.code,event.reason);
     }
 }
 
-// Send Command to Client Websocket
-// function sendToWebSocket(addr: string,m: string) {
-//   if (ws == undefined || ws.readyState == WebSocket.CLOSED || ws.readyState == WebSocket.CLOSING) {
-//     console.log('Spawning WebSocket...');
-//     ws = new WebSocket(addr, "protocolOne");
-//     ws.onclose = function (event) {
-//       console.log("WebSocket closing 1...");
-//       console.log("Close Code",event.code,event.reason);
-//       listenAtWebSocket(addr);
-//     }
-//     ws.onmessage = function (event) {
-//       var msg = JSON.parse(event.data)
-//       console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-//       ws.close();
-//     }
-//     ws.onopen = function (event) {
-//       ws.send(m);
-//       console.log(m);
-//       // ws.close();
-//     };
-//   } else if (ws.readyState == WebSocket.OPEN) {
-//     ws.onmessage = function (event) {
-//       var msg = JSON.parse(event.data)
-//       console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-//       ws.close();
-//     }
-//     ws.send(m)
-//     console.log(m);
-//     // ws.close();
-//   } else {
-//     ws.onmessage = function (event) {
-//       var msg = JSON.parse(event.data)
-//       console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-//       ws.close();
-//     }
-//     ws.onopen = function (event) {
-//       ws.send(m);
-//       console.log(m);
-//       // ws.close();
-//     };
-//   }
-//   // ws.onmessage = function (event) {
-//   //   var msg = JSON.parse(event.data)
-//   //   console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-//   // }
-//   // ws.onclose = function (event) {
-//   //   console.log("Websocket closing...");
-//   //   listenAtWebSocket(addr);
-//   // }
-// }
-
-// Listen at Client Websocket
-// function listenAtWebSocket(addr: string) {
-//   console.log("Listening");
-//   ws = new WebSocket(addr, "protocolOne");
-//   ws.onopen = function (event) {
-//     console.log('Spawning WebSocket...');
-//   };
-//   ws.onmessage = function (event) {
-//     var msg = JSON.parse(event.data)
-//     console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
-//   }
-//   ws.onclose = function (event) {
-//     console.log("WebSocket closing...");
-//     listenAtWebSocket(addr);
-//   }
-// }
-
 // Establish WebSocket Connection with WeTube (Go) Client
 var myLocalWebSocketAddr: string;
+var ws: WebSocket;
 // var myLocalWebSocket: WebSocket;
-// var ws: WebSocket;
 var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 tempWebSocket.onopen = function (event) {
   tempWebSocket.send("Which port should I use?");
@@ -171,7 +118,6 @@ tempWebSocket.onmessage = function (event) {
   console.log("WeTubeServer: Use port "+event.data)
   console.log("Connecting to websocket at ws://localhost:"+event.data+"/ws");
   myLocalWebSocketAddr = "ws://localhost:"+event.data+"/ws"
-  sendToWebSocket(myLocalWebSocketAddr,"Who are my peers?");
+  DialWebSocket(myLocalWebSocketAddr);
   tempWebSocket.close();
-  // listenAtWebSocket(myLocalWebSocketAddr);
 }
