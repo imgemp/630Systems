@@ -54,6 +54,7 @@ function playVideo(): void {
     Target: null,
   };
   ws.send(JSON.stringify(cmd));
+  console.log(cmd);
 }
 
 function pauseVideo(): void {
@@ -64,6 +65,7 @@ function pauseVideo(): void {
     Target: null,
   };
   ws.send(JSON.stringify(cmd));
+  console.log(cmd);
 }
 
 function stopVideo(): void {
@@ -74,6 +76,7 @@ function stopVideo(): void {
     Target: null,
   };
   ws.send(JSON.stringify(cmd));
+  console.log(cmd);
 }
 
 function seekTo(seconds: number): void {
@@ -84,6 +87,7 @@ function seekTo(seconds: number): void {
     Target: null,
   };
   ws.send(JSON.stringify(cmd));
+  console.log(cmd);
 }
 
 console.log("Starting WeTubeClient (JS)");
@@ -108,16 +112,17 @@ function DialWebSocket(addr: string) {
 // Establish WebSocket Connection with WeTube (Go) Client
 var myLocalWebSocketAddr: string;
 var ws: WebSocket;
-// var myLocalWebSocket: WebSocket;
 var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 tempWebSocket.onopen = function (event) {
   tempWebSocket.send("Which port should I use?");
   console.log("Which port should I use?");
 };
 tempWebSocket.onmessage = function (event) {
-  console.log("WeTubeServer: Use port "+event.data)
-  console.log("Connecting to websocket at ws://localhost:"+event.data+"/ws");
-  myLocalWebSocketAddr = "ws://localhost:"+event.data+"/ws"
+  var init = JSON.parse(event.data)
+  console.log("WeTubeServer: Use port "+init.Port)
+  console.log("Connecting to websocket at ws://localhost:"+init.Port+"/ws");
+  myLocalWebSocketAddr = "ws://localhost:"+init.Port+"/ws"
+  console.log(init.PI);
   DialWebSocket(myLocalWebSocketAddr);
   tempWebSocket.close();
 }

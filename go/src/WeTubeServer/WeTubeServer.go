@@ -16,19 +16,17 @@ const EDITOR int = 1
 const MASTER int = 2
 
 // Peer Map
-var myPeerInfo = &PeerInfo{m: make(map[string]int)} // Map of Peer IDs to Permission Levels
+var myPeerInfo = &PeerInfo{m: make(map[string]int)} // Map of Peer Addresses to Permission Levels
 
 type PeerInfo struct {
     m  map[string]int
     mu sync.RWMutex
 }
 
-// type Message struct {
-//     ID   string
-//     Addr string
-//     Body string
-//     PI map[string]int
-// }
+type Init struct {
+    Port int
+    PI map[string]int
+}
 
 // ONLY FOR TESTING
 // Issue new ports (internal and external websockets) to the Go Client
@@ -55,6 +53,26 @@ func IssuePort_Go(ws *websocket.Conn) {
 }
 
 // Issue new ports (internal and external websockets) to the JS Client
+// func IssuePort_JS(ws *websocket.Conn) {
+//     // Receive Message
+//     var msg = make([]byte, 512)
+//     var n int
+//     var err error
+//     if n, err = ws.Read(msg); err != nil {
+//         log.Fatal(err)
+//     }
+//     fmt.Printf("JS Client: %s\n", msg[:n])
+//     // Issue New Port # to JS Client
+//     if JSClientCount < len(GoPortList) {
+//         if _, err := ws.Write([]byte(strconv.Itoa(GoPortList[JSClientCount]))); err != nil {
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("Use ports %s and %s\n",strconv.Itoa(GoPortList[JSClientCount]),strconv.Itoa(GoPortList[JSClientCount]+1))
+//         }
+//         JSClientCount += 1
+//     }
+// }
+
 func IssuePort_JS(ws *websocket.Conn) {
     // Receive Message
     var msg = make([]byte, 512)
@@ -66,10 +84,18 @@ func IssuePort_JS(ws *websocket.Conn) {
     fmt.Printf("JS Client: %s\n", msg[:n])
     // Issue New Port # to JS Client
     if JSClientCount < len(GoPortList) {
-        if _, err := ws.Write([]byte(strconv.Itoa(GoPortList[JSClientCount]))); err != nil {
+        init := Init{
+            Port: GoPortList[JSClientCount],
+            PI: myPeerInfo.m,
+        }
+        e := json.NewEncoder(ws)
+        err := e.Encode(init)
+        if err != nil {
             log.Fatal(err)
         } else {
-            fmt.Printf("Use ports %s and %s\n",strconv.Itoa(GoPortList[JSClientCount]),strconv.Itoa(GoPortList[JSClientCount]+1))
+            fmt.Println("Sent Init To JS Client")
+            fmt.Printf("\tinit.Port: %s\n",init.Port)
+            fmt.Printf("\tinit.PI: %s\n",init.PI)
         }
         JSClientCount += 1
     }
@@ -90,7 +116,7 @@ func IssuePeerSet_Go(ws *websocket.Conn) {
         fmt.Printf("Issue as Master\n")
         myPeerInfo.m[string(msg[:n])] = MASTER
     } else {
-        myPeerInfo.m[string(msg[:n])] = MASTER
+        myPeerInfo.m[string(msg[:n])] = VIEWER
     }
     // Issue Peer Set to Go Client
     e := json.NewEncoder(ws)

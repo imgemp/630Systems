@@ -118,8 +118,8 @@ func ServeClient(ws *websocket.Conn) {
 
 func ReceiveFromClient(ws *websocket.Conn) {
     d := json.NewDecoder(ws)
-    var cmd Command
     for {
+        var cmd Command
         err := d.Decode(&cmd)
         if err != nil {
             log.Fatal(err)
@@ -142,20 +142,16 @@ func ReceiveFromClient(ws *websocket.Conn) {
 
 func SendToClient(ws *websocket.Conn) {
     for {
-        select {
-            case cmd := <-in:
-                e := json.NewEncoder(ws)
-                err := e.Encode(cmd)
-                if err != nil {
-                    log.Fatal(err)
-                } else {
-                    fmt.Println("Sent Command To Client")
-                    fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
-                    fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
-                    fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
-                }
-            default:
-                // Continue on if channel is empty
+        cmd := <-in
+        e := json.NewEncoder(ws)
+        err := e.Encode(cmd)
+        if err != nil {
+            log.Fatal(err)
+        } else {
+            fmt.Println("Sent Command To Client")
+            fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+            fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+            fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
         }
     }
 }
@@ -202,19 +198,15 @@ func ReceiveMessage(c net.Conn) (Message,bool) {
 
 func SendToPeers() {
     for {
-        select {
-            case m := <-out:
-                fmt.Println("Sending Message To Peers")
-                fmt.Printf("\tm.ID: %s\n",m.ID)
-                fmt.Printf("\tm.Addr: %s\n",m.Addr)
-                fmt.Printf("\tm.Body: %s\n",m.Body)
-                fmt.Printf("\tm.PI: %s\n",m.PI)
-                myPeerChans_copy := myPeerChans.Copy()
-                go AddToChannels(m,myPeerChans_copy)
-                go DistributeToPeers(myPeerChans_copy)
-            default:
-                // Continue on if channel empty
-        }
+        m := <-out
+        fmt.Println("Sending Message To Peers")
+        fmt.Printf("\tm.ID: %s\n",m.ID)
+        fmt.Printf("\tm.Addr: %s\n",m.Addr)
+        fmt.Printf("\tm.Body: %s\n",m.Body)
+        fmt.Printf("\tm.PI: %s\n",m.PI)
+        myPeerChans_copy := myPeerChans.Copy()
+        go AddToChannels(m,myPeerChans_copy)
+        go DistributeToPeers(myPeerChans_copy)
     }
 }
 
