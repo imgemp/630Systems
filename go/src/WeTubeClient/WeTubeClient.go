@@ -14,7 +14,7 @@ import (
     "encoding/json"
     "crypto/rand"
     "sync"
-    "time"
+    // "time"
 )
 
 // Global Variables
@@ -97,8 +97,9 @@ func RetrievePeerInfo() {
     }
 }
 
-var fromClient chan Command
-var toClient chan Command
+var out chan Message
+var in chan Command
+var blockExit chan string
 
 type Command struct {
     Action string
@@ -108,175 +109,246 @@ type Command struct {
 
 // Serve JS Client WebSocket Connection
 func ServeClient(ws *websocket.Conn) {
-    for {
-        go ReceiveFromClient(ws)
-        go SendToClient(ws)
-    }
-    fmt.Println("Closing Client WebSocket Connection...")
+    var reason string = "None"
+    go ReceiveFromClient(ws)
+    go SendToClient(ws)
+    reason = <-blockExit
+    fmt.Println("Closing Client WebSocket Connection: %s\n",reason)
 }
 
 func ReceiveFromClient(ws *websocket.Conn) {
     d := json.NewDecoder(ws)
     var cmd Command
-    err := d.Decode(&cmd)
-    if err != nil {
-        log.Fatal(err)
-    } else {
-        // Should construct message for peers first here
-        fromClient <- cmd
-        fmt.Println("Received Message")
-        fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
-        fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
-        fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+    for {
+        err := d.Decode(&cmd)
+        if err != nil {
+            log.Fatal(err)
+        } else {
+            // Should construct message for peers first here
+            m := Message{
+                ID: RandomID(),
+                Addr: myP2PSocketAddr,
+                Body: cmd,
+                PI: myPeerInfo.m,
+            }
+            out <- m
+            fmt.Println("Received Command From Client")
+            fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+            fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+            fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+        }
     }
 }
 
 func SendToClient(ws *websocket.Conn) {
-    select {
-        case cmd := <-toClient:
-            e := json.NewEncoder(ws)
-            err := e.Encode(cmd)
-            if err != nil {
-                log.Fatal(err)
-            } else {
-                fmt.Printf("Sent Message: %s\n",cmd)
-            }
-        default:
-            // Continue on if channel is empty
+    for {
+        select {
+            case cmd := <-in:
+                e := json.NewEncoder(ws)
+                err := e.Encode(cmd)
+                if err != nil {
+                    log.Fatal(err)
+                } else {
+                    fmt.Println("Sent Command To Client")
+                    fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+                    fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+                    fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+                }
+            default:
+                // Continue on if channel is empty
+        }
     }
 }
 
 // Serve P2P Socket Connection
-func ServePeers() {
-    for {
-        go ReceiveFromPeer()
-        go SendToPeers()
-    }
-    fmt.Println("Closing P2P Socket Connection...")
+func ServePeers(l net.Listener) {
+    go ReceiveFromPeers(l)
+    go SendToPeers()
 }
 
-func ReceiveFromPeer() {
-    // read msg from peer socket
-    // convert to command cmd
-    // toClient <- cmd
+func ReceiveFromPeers(l net.Listener) {
+    for {
+        c, err := l.Accept()
+        if err != nil {
+                log.Fatal(err)
+        }
+        if m, ok := ReceiveMessage(c); ok {
+            cmd := Command{
+                Action: m.Body.Action,
+                Argument: m.Body.Argument,
+                Target: m.Body.Target,
+            }
+            fmt.Println("Received Message From Peer")
+            fmt.Printf("\tm.ID: %s\n",m.ID)
+            fmt.Printf("\tm.Addr: %s\n",m.Addr)
+            fmt.Printf("\tm.Body: %s\n",m.Body)
+            fmt.Printf("\tm.PI: %s\n",m.PI)
+            in <- cmd
+        }
+    }
+}
+
+func ReceiveMessage(c net.Conn) (Message,bool) {
+    d := json.NewDecoder(c)
+    var m Message
+    err := d.Decode(&m)
+    if err != nil {
+        log.Println("<", c.RemoteAddr(), "error:", err)
+        return m, false
+    }
+    c.Close()
+    return m, true
 }
 
 func SendToPeers() {
-    select {
-        case cmd := <-fromClient:
-            fmt.Println("Took Command Off fromClient Channel")
-            fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
-            fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
-            fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
-            // convert to message
-            // send to peers
-        default:
-            // Continue on if channel empty
+    for {
+        select {
+            case m := <-out:
+                fmt.Println("Sending Message To Peers")
+                fmt.Printf("\tm.ID: %s\n",m.ID)
+                fmt.Printf("\tm.Addr: %s\n",m.Addr)
+                fmt.Printf("\tm.Body: %s\n",m.Body)
+                fmt.Printf("\tm.PI: %s\n",m.PI)
+                myPeerChans_copy := myPeerChans.Copy()
+                go AddToChannels(m,myPeerChans_copy)
+                go DistributeToPeers(myPeerChans_copy)
+            default:
+                // Continue on if channel empty
+        }
     }
+}
+
+func AddToChannels(m Message, p map[string]chan Message) {
+    for _, ch := range p {
+        ch <- m
+    }
+}
+
+func DistributeToPeers(p map[string]chan Message) {
+    for addr, ch := range p {
+        go DialPeer(addr,ch)
+    }
+}
+
+func DialPeer(addr string, ch chan Message) {
+    m := <-ch
+    c, err := net.Dial("tcp", addr)
+    if err != nil {
+        log.Println(">", addr, "dial error:", err)
+    }
+    defer func() {
+        c.Close()
+    }()
+    e := json.NewEncoder(c)
+    err = e.Encode(m)
+    if err != nil {
+        log.Println(">", addr, "error:", err)
+    }
+    fmt.Printf("Sent Message To Peer: %s\n",addr)
 }
 
 // Relay the data received on the WebSocket.
-func AnswerClient(ws *websocket.Conn) {
-    // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("JS Client: %s\n", msg[:n])
-    var s string = string(msg[:n])
-    if (s == "Who are my peers?") {
-        // Respond with peers
-        duration := time.Duration(2)*time.Second
-        time.Sleep(duration)
-        e := json.NewEncoder(ws)
-        fmt.Println("Creating encoder")
-        time.Sleep(duration)
-        duration = time.Duration(2)*time.Second
-        for addr, rank := range myPeerInfo.m {
-            fmt.Println("Addr:", addr, "Rank:", rank)
-        }
-        err = e.Encode(myPeerInfo.m)
-        fmt.Println("Actually encoding")
-        time.Sleep(duration)
-        duration = time.Duration(4)*time.Second
-        if err != nil {
-            log.Fatal(err)
-        } else {
-            fmt.Printf("Peer Info Sent\n")
-            time.Sleep(duration)
-            duration = time.Duration(2)*time.Second
-        }
-        // Alert peers to client's existence
-        // create message with command: Mote, arg_str: client's address, arg_int: PeerInfo.m
-    } else {
-        m := Message{
-            ID:   RandomID(),
-            Addr: myP2PSocketAddr,
-            Body: s,
-            PI: myPeerInfo.m,
-        }
-        Seen(m.ID)
-        fmt.Printf("About to broadcast: %s\n",m)
-        go broadcast(m)
-        fmt.Println("Message broadcasted")
-        for addr, _ := range myPeerChans.m {
-            fmt.Printf("Attempting to dial peer %s\n",addr)
-            go DialPeer(addr)
-        }
-    }
-}
+// func AnswerClient(ws *websocket.Conn) {
+//     // Receive Message
+//     var msg = make([]byte, 512)
+//     var n int
+//     var err error
+//     if n, err = ws.Read(msg); err != nil {
+//         log.Fatal(err)
+//     }
+//     fmt.Printf("JS Client: %s\n", msg[:n])
+//     var s string = string(msg[:n])
+//     if (s == "Who are my peers?") {
+//         // Respond with peers
+//         duration := time.Duration(2)*time.Second
+//         time.Sleep(duration)
+//         e := json.NewEncoder(ws)
+//         fmt.Println("Creating encoder")
+//         time.Sleep(duration)
+//         duration = time.Duration(2)*time.Second
+//         for addr, rank := range myPeerInfo.m {
+//             fmt.Println("Addr:", addr, "Rank:", rank)
+//         }
+//         err = e.Encode(myPeerInfo.m)
+//         fmt.Println("Actually encoding")
+//         time.Sleep(duration)
+//         duration = time.Duration(4)*time.Second
+//         if err != nil {
+//             log.Fatal(err)
+//         } else {
+//             fmt.Printf("Peer Info Sent\n")
+//             time.Sleep(duration)
+//             duration = time.Duration(2)*time.Second
+//         }
+//         // Alert peers to client's existence
+//         // create message with command: Mote, arg_str: client's address, arg_int: PeerInfo.m
+//     } else {
+//         m := Message{
+//             ID:   RandomID(),
+//             Addr: myP2PSocketAddr,
+//             Body: s,
+//             PI: myPeerInfo.m,
+//         }
+//         Seen(m.ID)
+//         fmt.Printf("About to broadcast: %s\n",m)
+//         go broadcast(m)
+//         fmt.Println("Message broadcasted")
+//         for addr, _ := range myPeerChans.m {
+//             fmt.Printf("Attempting to dial peer %s\n",addr)
+//             go DialPeer(addr)
+//         }
+//     }
+// }
 
-func AnswerPeer(c net.Conn) {
-    log.Println("<", c.RemoteAddr(), "accepted connection")
-    d := json.NewDecoder(c)
-    for {
-        fmt.Println("got here1")
-        var m Message
-        err := d.Decode(&m)
-        fmt.Println("done decoding")
-        if err != nil {
-            log.Println("<", c.RemoteAddr(), "error:", err)
-            break
-        }
-        fmt.Println("got here2")
-        if Seen(m.ID) {
-            continue
-        }
-        log.Printf("< %v received: %v", c.RemoteAddr(), m)
-        fmt.Println(m.Body)
-        // Send Message to Client
-        DialClient(m)
-    }
-    c.Close()
-    log.Println("<", c.RemoteAddr(), "close")
-}
+// func AnswerPeer(c net.Conn) {
+//     log.Println("<", c.RemoteAddr(), "accepted connection")
+//     d := json.NewDecoder(c)
+//     for {
+//         fmt.Println("got here1")
+//         var m Message
+//         err := d.Decode(&m)
+//         fmt.Println("done decoding")
+//         if err != nil {
+//             log.Println("<", c.RemoteAddr(), "error:", err)
+//             break
+//         }
+//         fmt.Println("got here2")
+//         if Seen(m.ID) {
+//             continue
+//         }
+//         log.Printf("< %v received: %v", c.RemoteAddr(), m)
+//         fmt.Println(m.Body)
+//         // Send Message to Client
+//         DialClient(m)
+//     }
+//     c.Close()
+//     log.Println("<", c.RemoteAddr(), "close")
+// }
 
-func DialClient(msg Message) {
-    fmt.Println("dialing client")
-    // "ws://localhost:8080/ws/go"
-    var temp []string
-    temp = append(temp,"ws://localhost")
-    temp = append(temp,myLocalWebsocketAddr)
-    temp = append(temp,"/ws")
-    var wsaddr string = strings.Join(temp,"")
-    ws, err := websocket.Dial(wsaddr, "", origin)
-    if err != nil {
-        fmt.Println("Error dialing client")
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Dial succesful: %s\n",wsaddr)
-    }
-    e := json.NewEncoder(ws)
-    err = e.Encode(msg)
-    if err != nil {
-        fmt.Println("Error encoding message to js client")
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Message Sent\n")
-    }
-}
+// func DialClient(msg Message) {
+//     fmt.Println("dialing client")
+//     // "ws://localhost:8080/ws/go"
+//     var temp []string
+//     temp = append(temp,"ws://localhost")
+//     temp = append(temp,myLocalWebsocketAddr)
+//     temp = append(temp,"/ws")
+//     var wsaddr string = strings.Join(temp,"")
+//     ws, err := websocket.Dial(wsaddr, "", origin)
+//     if err != nil {
+//         fmt.Println("Error dialing client")
+//         log.Fatal(err)
+//     } else {
+//         fmt.Printf("Dial succesful: %s\n",wsaddr)
+//     }
+//     e := json.NewEncoder(ws)
+//     err = e.Encode(msg)
+//     if err != nil {
+//         fmt.Println("Error encoding message to js client")
+//         log.Fatal(err)
+//     } else {
+//         fmt.Printf("Message Sent\n")
+//     }
+// }
 
 // RandomID returns an 8 byte random string in hexadecimal.
 func RandomID() string {
@@ -293,7 +365,7 @@ type PeerInfo struct {
 type Message struct {
     ID   string
     Addr string
-    Body string
+    Body Command
     PI map[string]int
 }
 
@@ -320,98 +392,109 @@ type PeerChans struct {
 //     delete(p.m, addr)
 // }
 
-func (p *PeerChans) List() []chan Message {
+// func (p *PeerChans) List() []chan Message {
+//     p.mu.RLock()
+//     defer p.mu.RUnlock()
+//     l := make([]chan Message, 0, len(p.m)-1)
+//     for addr, ch := range p.m {
+//         if addr != myP2PSocketAddr {
+//             l = append(l, ch)
+//         }
+//     }
+//     return l
+// }
+
+func (p *PeerChans) Copy() (map[string]chan Message) {
     p.mu.RLock()
     defer p.mu.RUnlock()
-    l := make([]chan Message, 0, len(p.m))
+    copy := make(map[string]chan Message)
     for addr, ch := range p.m {
         if addr != myP2PSocketAddr {
-            l = append(l, ch)
+            copy[addr] = ch
         }
     }
-    fmt.Println("Return PeerChans List")
-    return l
+    return copy
 }
 
-func broadcast(m Message) {
-    // channel := make(chan int)
-    // var two int = 2
-    // channel <- two
-    fmt.Println("got here")
-    // fmt.Printf("Length of channel list = %d\n",len(test))
-    for _, ch := range myPeerChans.List() {
-        fmt.Printf("Message is %s\n",m)
-        ch <- m // block on channels for now
-        // select {
-        // case ch <- m:
-        // default:
-        //     // Okay to drop messages sometimes.
-        // }
-    }
-}
+// func broadcast(m Message) {
+//     // channel := make(chan int)
+//     // var two int = 2
+//     // channel <- two
+//     fmt.Println("got here")
+//     // fmt.Printf("Length of channel list = %d\n",len(test))
+//     for _, ch := range myPeerChans.List() {
+//         fmt.Printf("Message is %s\n",m)
+//         ch <- m // block on channels for now
+//         // select {
+//         // case ch <- m:
+//         // default:
+//         //     // Okay to drop messages sometimes.
+//         // }
+//     }
+// }
 
 // DIAL FUNCTION NEEDS WORK
-func DialPeer(addr string) {
-    if addr == myP2PSocketAddr {
-        return // Don't try to dial self.
-    }
+// func DialPeer(addr string) {
+//     if addr == myP2PSocketAddr {
+//         return // Don't try to dial self.
+//     }
 
-    // ch := myPeerChans.Add(addr)
-    // if ch == nil {
-    //     return // Peer already connected.
-    // }
-    // defer myPeerChans.Remove(addr)
-    // ch := peers.m[addr]
-    ch := myPeerChans.m[addr]
+//     // ch := myPeerChans.Add(addr)
+//     // if ch == nil {
+//     //     return // Peer already connected.
+//     // }
+//     // defer myPeerChans.Remove(addr)
+//     // ch := peers.m[addr]
+//     ch := myPeerChans.m[addr]
 
-    log.Println(">", addr, "dialing")
-    c, err := net.Dial("tcp", addr)
-    if err != nil {
-        log.Println(">", addr, "dial error:", err)
-        return
-    }
-    log.Println(">", addr, "connected")
-    defer func() {
-        c.Close()
-        log.Println(">", addr, "closed")
-    }()
+//     log.Println(">", addr, "dialing")
+//     c, err := net.Dial("tcp", addr)
+//     if err != nil {
+//         log.Println(">", addr, "dial error:", err)
+//         return
+//     }
+//     log.Println(">", addr, "connected")
+//     defer func() {
+//         c.Close()
+//         log.Println(">", addr, "closed")
+//     }()
 
-    fmt.Println("setting up encoder")
-    e := json.NewEncoder(c)
-    fmt.Println("blocking on channel")
-    m := <-ch
-    fmt.Println("printing message")
-    fmt.Println(m)
-    fmt.Println("encoding message")
-    err = e.Encode(m)
-    if err != nil {
-        log.Println(">", addr, "error:", err)
-        return
-    }
-    // for m := range ch { // why range?
-    //     err := e.Encode(m)
-    //     if err != nil {
-    //         log.Println(">", addr, "error:", err)
-    //         return
-    //     }
-    // }
-}
+//     fmt.Println("setting up encoder")
+//     e := json.NewEncoder(c)
+//     fmt.Println("blocking on channel")
+//     m := <-ch
+//     fmt.Println("printing message")
+//     fmt.Println(m)
+//     fmt.Println("encoding message")
+//     err = e.Encode(m)
+//     if err != nil {
+//         log.Println(">", addr, "error:", err)
+//         return
+//     }
+//     // for m := range ch { // why range?
+//     //     err := e.Encode(m)
+//     //     if err != nil {
+//     //         log.Println(">", addr, "error:", err)
+//     //         return
+//     //     }
+//     // }
+// }
 
-var seenIDs = struct {
-    m map[string]bool
-    sync.Mutex
-}{m: make(map[string]bool)}
+// var seenIDs = struct {
+//     m map[string]bool
+//     sync.Mutex
+// }{m: make(map[string]bool)}
 
-func Seen(id string) bool {
-    if id == "" {
-        return false
-    }
-    seenIDs.Lock()
-    ok := seenIDs.m[id]
-    seenIDs.m[id] = true
-    seenIDs.Unlock()
-    return ok
-}
+// func Seen(id string) bool {
+//     if id == "" {
+//         return false
+//     }
+//     seenIDs.Lock()
+//     ok := seenIDs.m[id]
+//     seenIDs.m[id] = true
+//     seenIDs.Unlock()
+//     return ok
+// }
 
 func main() {
 
@@ -419,8 +502,9 @@ func main() {
     RetrieveSockets()
     RetrievePeerInfo()
 
-    fromClient = make(chan Command)
-    toClient = make(chan Command)
+    out = make(chan Message)
+    in = make(chan Command)
+    blockExit = make(chan string)
 
     // Listen at Peer Socket
     fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocketAddr)
@@ -430,17 +514,18 @@ func main() {
     }
 
     // Serve Peers on Request
-    go func() {
-        for {
-            fmt.Printf("Waiting for peer\n")
-            c, err := l.Accept()
-            if err != nil {
-                    log.Fatal(err)
-            }
-            fmt.Printf("Accepting peer\n")
-            go AnswerPeer(c)
-        }
-    }()
+    // go func() {
+    //     for {
+    //         fmt.Printf("Waiting for peer\n")
+    //         c, err := l.Accept()
+    //         if err != nil {
+    //                 log.Fatal(err)
+    //         }
+    //         fmt.Printf("Accepting peer\n")
+    //         go AnswerPeer(c)
+    //     }
+    // }()
+    ServePeers(l)
 
     // Create Client Websocket Handler
     http.Handle("/ws", websocket.Handler(ServeClient))
