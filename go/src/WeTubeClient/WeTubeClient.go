@@ -108,16 +108,10 @@ type Command struct {
 
 // Serve JS Client WebSocket Connection
 func ServeClient(ws *websocket.Conn) {
-    fromClient = make(chan Command)
-    toClient = make(chan Command)
-    func() {
-        for {
-            go ReceiveFromClient(ws)
-            go SendToClient(ws)
-            go ReceiveFromPeer()
-            go SendToPeer()
-        }
-    }()
+    for {
+        go ReceiveFromClient(ws)
+        go SendToClient(ws)
+    }
     fmt.Println("Closing Client WebSocket Connection...")
 }
 
@@ -128,6 +122,7 @@ func ReceiveFromClient(ws *websocket.Conn) {
     if err != nil {
         log.Fatal(err)
     } else {
+        // Should construct message for peers first here
         fromClient <- cmd
         fmt.Println("Received Message")
         fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
@@ -137,14 +132,27 @@ func ReceiveFromClient(ws *websocket.Conn) {
 }
 
 func SendToClient(ws *websocket.Conn) {
-    cmd := <-toClient
-    e := json.NewEncoder(ws)
-    err := e.Encode(cmd)
-    if err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Sent Message: %s\n",cmd)
+    select {
+        case cmd := <-toClient:
+            e := json.NewEncoder(ws)
+            err := e.Encode(cmd)
+            if err != nil {
+                log.Fatal(err)
+            } else {
+                fmt.Printf("Sent Message: %s\n",cmd)
+            }
+        default:
+            // Continue on if channel is empty
     }
+}
+
+// Serve P2P Socket Connection
+func ServePeers() {
+    for {
+        go ReceiveFromPeer()
+        go SendToPeers()
+    }
+    fmt.Println("Closing P2P Socket Connection...")
 }
 
 func ReceiveFromPeer() {
@@ -153,14 +161,18 @@ func ReceiveFromPeer() {
     // toClient <- cmd
 }
 
-func SendToPeer() {
-    cmd := <-fromClient
-    fmt.Println("Took Command Off fromClient Channel")
-    fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
-    fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
-    fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
-    // convert to message
-    // send to peers
+func SendToPeers() {
+    select {
+        case cmd := <-fromClient:
+            fmt.Println("Took Command Off fromClient Channel")
+            fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
+            fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
+            fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
+            // convert to message
+            // send to peers
+        default:
+            // Continue on if channel empty
+    }
 }
 
 // Relay the data received on the WebSocket.
@@ -406,6 +418,9 @@ func main() {
     // ONLY FOR TESTING
     RetrieveSockets()
     RetrievePeerInfo()
+
+    fromClient = make(chan Command)
+    toClient = make(chan Command)
 
     // Listen at Peer Socket
     fmt.Printf("Listening for Peers at http://localhost%s\n", myP2PSocketAddr)
