@@ -9,6 +9,7 @@ import (
     // "time"
     "encoding/json"
     "sync"
+    "strings"
 )
 
 const VIEWER int = 0
@@ -35,19 +36,20 @@ var GoPortList []int
 var JSClientCount = 0
 func IssuePort_Go(ws *websocket.Conn) {
     // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Go Client: %s\n", msg[:n])
+    // var msg = make([]byte, 512)
+    // var n int
+    // var err error
+    // if n, err = ws.Read(msg); err != nil {
+    //     log.Fatal(err)
+    // }
+    // fmt.Printf("Go Client: %s\n", msg[:n])
     // Issue New Port # to Go Client
     Port += 2
-    GoPortList = append(GoPortList,Port)
     if _, err := ws.Write([]byte(strconv.Itoa(Port))); err != nil {
+        Port -= 2
         log.Fatal(err)
     } else {
+        GoPortList = append(GoPortList,Port)
         fmt.Printf("Use ports %s and %s\n",strconv.Itoa(Port),strconv.Itoa(Port+1))
     }
 }
@@ -74,19 +76,17 @@ func IssuePort_Go(ws *websocket.Conn) {
 // }
 
 func IssuePort_JS(ws *websocket.Conn) {
-    // Receive Message
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("JS Client: %s\n", msg[:n])
-    // Issue New Port # to JS Client
     if JSClientCount < len(GoPortList) {
         init := Init{
             Port: GoPortList[JSClientCount],
             PI: myPeerInfo.m,
+        }
+        addr := strings.Join([]string{":",strconv.Itoa(init.Port+1)},"");
+        fmt.Printf("addr: %s\n",addr)
+        if len(myPeerInfo.m) == 0 {
+            myPeerInfo.m[addr] = MASTER // is this out of order? - making update after create init package
+        } else {
+            myPeerInfo.m[addr] = VIEWER
         }
         e := json.NewEncoder(ws)
         err := e.Encode(init)
@@ -102,34 +102,34 @@ func IssuePort_JS(ws *websocket.Conn) {
 }
 
 // Provide set of peer addresses
-func IssuePeerSet_Go(ws *websocket.Conn) {
-    // Receive Message - Peer's Socket Address
-    var msg = make([]byte, 512)
-    var n int
-    var err error
-    if n, err = ws.Read(msg); err != nil {
-        log.Fatal(err)
-    }
-    fmt.Printf("Go Client: %s\n", msg[:n])
-    // Add Peer's Address to Peer Set (if len(map) == 0, master, else, viewer by default)
-    if len(myPeerInfo.m) == 0 {
-        fmt.Printf("Issue as Master\n")
-        myPeerInfo.m[string(msg[:n])] = MASTER
-    } else {
-        myPeerInfo.m[string(msg[:n])] = VIEWER
-    }
-    // Issue Peer Set to Go Client
-    e := json.NewEncoder(ws)
-    err = e.Encode(myPeerInfo.m)
-    if err != nil {
-        log.Fatal(err)
-    } else {
-        fmt.Printf("Peer Set Sent\n")
-        for key, value := range myPeerInfo.m {
-            fmt.Println("Key:", key, "Value:", value)
-        }
-    }
-}
+// func IssuePeerSet_Go(ws *websocket.Conn) {
+//     // Receive Message - Peer's Socket Address
+//     var msg = make([]byte, 512)
+//     var n int
+//     var err error
+//     if n, err = ws.Read(msg); err != nil {
+//         log.Fatal(err)
+//     }
+//     fmt.Printf("Go Client: %s\n", msg[:n])
+//     // Add Peer's Address to Peer Set (if len(map) == 0, master, else, viewer by default)
+//     if len(myPeerInfo.m) == 0 {
+//         fmt.Printf("Issue as Master\n")
+//         myPeerInfo.m[string(msg[:n])] = MASTER
+//     } else {
+//         myPeerInfo.m[string(msg[:n])] = VIEWER
+//     }
+//     // Issue Peer Set to Go Client
+//     e := json.NewEncoder(ws)
+//     err = e.Encode(myPeerInfo.m)
+//     if err != nil {
+//         log.Fatal(err)
+//     } else {
+//         fmt.Printf("Peer Set Sent\n")
+//         for key, value := range myPeerInfo.m {
+//             fmt.Println("Key:", key, "Value:", value)
+//         }
+//     }
+// }
 
 func main() {
     fmt.Printf("Starting server at http://localhost:8080/\n")
@@ -138,7 +138,7 @@ func main() {
     http.Handle("/", http.FileServer(http.Dir("./go/src/WeTubeClient/")))
     http.Handle("/ws/go", websocket.Handler(IssuePort_Go))
     http.Handle("/ws/js", websocket.Handler(IssuePort_JS))
-    http.Handle("/ws/go/peer", websocket.Handler(IssuePeerSet_Go))
+    // http.Handle("/ws/go/peer", websocket.Handler(IssuePeerSet_Go))
 
     err := http.ListenAndServe(":8080", nil)
     if err != nil {
