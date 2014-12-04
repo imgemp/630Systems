@@ -21,9 +21,11 @@
         <br><br>
     </div>
     <div>
-    <select id="Master" name="Master" size="5"></select>
-    <select id="Editor" name="Editor" size="5"></select>
-    <select id="Viewer" name="Viewer" size="5"></select>
+    <select id="Master" name="Master" size="10" style="width: 200px"><option selected disabled>Masters</option></select>
+    <button type="button" onclick="PromoteEditor()"><--</button><button type="button" onclick="DemoteMaster()">--></button>
+    <select id="Editor" name="Editor" size="10" style="width: 200px"><option selected disabled>Editors</option></select>
+    <button type="button" onclick="PromoteViewer()"><--</button><button type="button" onclick="DemoteEditor()">--></button>
+    <select id="Viewer" name="Viewer" size="10" style="width: 200px"><option selected disabled>Viewers</option></select>
     </div>
   </body>
 </html>

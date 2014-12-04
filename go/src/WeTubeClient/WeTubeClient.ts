@@ -26,12 +26,11 @@ function onYouTubeIframeAPIReady() {
       'onStateChange': onPlayerStateChange
     }
   });
-  console.log("Player Ready");
+  console.log("(onYouTubeIframeAPIReady) Player Ready");
 }
 
 // 4. The API will call this function when the video player is ready.
 function onPlayerReady(event) {
-  // event.target.playVideo();
 }
 
 // 5. The API calls this function when the player's state changes.
@@ -39,13 +38,9 @@ function onPlayerReady(event) {
 //    the player should play for six seconds and then stop.
 var done = false;
 function onPlayerStateChange(event) {
-
-  // if (event.data == YT.PlayerState.PLAYING && !done) {
-  //   setTimeout(stopVideo, 6000);
-  //   done = true;
-  // }
 }
 
+// OnClick Video Commands
 function playVideo(): void {
   player.playVideo();
   var cmd = {
@@ -54,8 +49,8 @@ function playVideo(): void {
     Target: null,
   };
   var msg = {Body: cmd, PI: myPeerInfo};
-  ws.send(JSON.stringify(msg));
-  console.log(cmd);
+  cws.send(JSON.stringify(msg));
+  console.log("(playVideo) Play")
 }
 
 function pauseVideo(): void {
@@ -66,8 +61,8 @@ function pauseVideo(): void {
     Target: null,
   };
   var msg = {Body: cmd, PI: myPeerInfo};
-  ws.send(JSON.stringify(msg));
-  console.log(cmd);
+  cws.send(JSON.stringify(msg));
+  console.log("(pauseVideo) Pause")
 }
 
 function stopVideo(): void {
@@ -78,8 +73,8 @@ function stopVideo(): void {
     Target: null,
   };
   var msg = {Body: cmd, PI: myPeerInfo};
-  ws.send(JSON.stringify(msg));
-  console.log(cmd);
+  cws.send(JSON.stringify(msg));
+  console.log("(stopVideo) Stop")
 }
 
 function seekTo(seconds: number): void {
@@ -90,95 +85,126 @@ function seekTo(seconds: number): void {
     Target: null,
   };
   var msg = {Body: cmd, PI: myPeerInfo};
-  ws.send(JSON.stringify(msg));
-  console.log(cmd);
+  cws.send(JSON.stringify(msg));
+  console.log("(seekTo) SeekTo "+seconds.toString()+" Seconds")
 }
 
-console.log("Starting WeTubeClient (JS)");
+function ChangeRank(fromRank: string,toRank: string): void {
+  var index = (<HTMLSelectElement>document.getElementById(fromRank)).selectedIndex;
+  var option = (<HTMLSelectElement>document.getElementById(fromRank)).options[index];
+  (<HTMLSelectElement>document.getElementById(fromRank)).remove(index);
+  (<HTMLSelectElement>document.getElementById(toRank)).add(option);
+  console.log("(ChangeRank) "+fromRank+" to "+toRank+": "+option.text);
+}
 
-// Dial Client Websocket
-function DialWebSocket(addr: string) {
-    ws = new WebSocket(addr, "protocolOne");
-    ws.onopen = function (event) {
+function PromoteEditor(): void {
+  ChangeRank('Editor','Master');
+}
+
+function DemoteMaster(): void {
+  ChangeRank('Master','Editor');
+}
+
+function PromoteViewer(): void {
+  ChangeRank('Viewer','Editor');
+}
+
+function DemoteEditor(): void {
+  ChangeRank('Editor','Viewer')
+}
+
+function KingViewer(): void {
+  ChangeRank('Viewer','Master');
+}
+
+function CrushMaster(): void {
+  ChangeRank('Master','Viewer');
+}
+
+// Connect to Client WebSocket
+function ClientWebSocket() {
+    cws = new WebSocket(cws_addr, "protocolOne");
+    cws.onopen = function (event) {
       var cmd = {Action: "NewPeer", Argument: null, Target: null};
       var msg = {Body: cmd, PI: myPeerInfo};
-      ws.send(JSON.stringify(msg));
+      cws.send(JSON.stringify(msg));
+      console.log("(ClientWebSocket/onopen)");
       console.log(msg);
     };
-    ws.onmessage = function (event) {
+    cws.onmessage = function (event) {
       var msg = JSON.parse(event.data)
-      console.log("Go Client: "+event.data.trim()); // this will turn into a command to be parsed and executed, should also update peer set
+      console.log("(ClientWebSocket/onmessage) "+event.data.trim());
       HandleMessage(msg);
     }
-    ws.onclose = function (event) {
-      console.log("WebSocket closing...",event.code,event.reason);
+    cws.onclose = function (event) {
+      console.log("(ClientWebSocket) WebSocket Closing...",event.code,event.reason);
     }
 }
 
+// Update myPeerInfo & HTML Ranks
 function UpdatePeers(PI: any) {
   for (var addr in PI) {
     if (!myPeerInfo[addr]) {
       myPeerInfo[addr] = PI[addr];
-      UpdateMEVList(addr,PI[addr]);
+      AddHTMLRank(addr,PI[addr]);
     }
   }
 }
 
+// Handle Peer Messages
 function HandleMessage(msg: any) {
   switch(msg.Body.Action) {
     case "NewPeer":
+      console.log("(HandleMessage) NewPeer");
       UpdatePeers(msg.PI)
-      console.log("NewPeer");
       break;
     case "Play":
+      console.log("(HandleMessage) Play");
       player.playVideo();
-      console.log("Play");
       break;
     case "Pause":
+      console.log("(HandleMessage) Pause");
       player.pauseVideo();
-      console.log("Pause");
       break;
     case "Stop":
+      console.log("(HandleMessage) Stop");
       player.stopVideo();
-      console.log("Stop");
       break;
     case "SeekTo":
+      console.log("(HandleMessage) SeekTo");
       player.seekTo(msg.Body.Argument,true);
-      console.log("SeekTo");
       break;
     default:
-      console.log("Command Not Recognized");
+      console.log("(HandleMessage) Command Not Recognized");
   }
 }
 
-function PopulateMEVLists(PI: any) {
-  for (var addr in PI) {
-    UpdateMEVList(addr,PI[addr]);
+// Populate HTML Ranks on Startup
+function PopulateHTMLRanks() {
+  for (var addr in myPeerInfo) {
+    AddHTMLRank(addr,myPeerInfo[addr]);
   }
 }
 
-function UpdateMEVList(addr: string, rank: number) {
+// Update Single HTML Rank - might want to make this check to see if addr is already in rank list or somewhere in ranks
+function AddHTMLRank(addr: string, rank: number) {
   var option = document.createElement("option");
   option.text = addr;
-  console.log(addr);
   switch(rank) {
   case Rank.Master:
-    var MList = <HTMLSelectElement>document.getElementById('Master');
-    MList.add(option);
-    console.log("Adding Master");
+    console.log("(UpdateHTMLRank) Adding Master");
+    (<HTMLSelectElement>document.getElementById('Master')).add(option);
     break;
   case Rank.Editor:
-    var EList = <HTMLSelectElement>document.getElementById('Editor');
-    EList.add(option);
-    console.log("Adding Editor");
+    console.log("(UpdateHTMLRank) Adding Editor");
+    (<HTMLSelectElement>document.getElementById('Editor')).add(option);
     break;
   case Rank.Viewer:
-    var VList = <HTMLSelectElement>document.getElementById('Viewer');
-    VList.add(option);
-    console.log("Adding Viewer");
+    console.log("(UpdateHTMLRank) Adding Viewer");
+    (<HTMLSelectElement>document.getElementById('Viewer')).add(option);
     break;
   default:   
-    console.log("Rank Not Recognized");
+    console.log("(UpdateHTMLRank) Rank Not Recognized");
   }
 }
 
@@ -189,22 +215,15 @@ enum Rank {
 }
 
 // Establish WebSocket Connection with WeTube (Go) Client
-var myLocalWebSocketAddr: string;
-var ws: WebSocket;
+var cws_addr: string;
+var cws: WebSocket;
 var myPeerInfo: any;
-var tempWebSocket = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
-tempWebSocket.onopen = function (event) {
-  // tempWebSocket.send("Which port should I use?");
-  console.log("Which port should I use?");
-};
-tempWebSocket.onmessage = function (event) {
+var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
+sws.onmessage = function (event) {
   var init = JSON.parse(event.data)
-  console.log("WeTubeServer: Use port "+init.Port)
-  console.log("Connecting to websocket at ws://localhost:"+init.Port+"/ws");
-  myLocalWebSocketAddr = "ws://localhost:"+init.Port+"/ws"
-  console.log(init.PI);
+  cws_addr = "ws://localhost:"+init.Port+"/ws"
   myPeerInfo = init.PI;
-  PopulateMEVLists(myPeerInfo);
-  DialWebSocket(myLocalWebSocketAddr);
-  tempWebSocket.close();
+  PopulateHTMLRanks();
+  ClientWebSocket();
+  sws.close();
 }
