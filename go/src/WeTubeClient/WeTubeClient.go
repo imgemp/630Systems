@@ -4,12 +4,14 @@ import (
     "fmt"
     "log"
     "net"
+    // "bytes"
     "net/http"
     "golang.org/x/net/websocket"
     "strings"
     "strconv"
     "encoding/json"
     "crypto/rand"
+    "crypto/rsa"
     "sync"
 )
 
@@ -53,6 +55,9 @@ var (
     out chan PeerMessage
     in chan ClientMessage
     blockExit chan string
+
+    pvkey rsa.PrivateKey
+    pbkey rsa.PublicKey
 )
 
 const (
@@ -66,20 +71,20 @@ func RetrieveSockets() {
     url := "ws://localhost:8080/ws/go"
     tempWS, err := websocket.Dial(url, "", "http://localhost/")
     if err != nil {
-        log.Fatal(err)
+        log.Fatal("(RetrieveSockets) ",err)
     }
 
     // Retrieve Client Port from Websocket
     var msg = make([]byte, 512)
     var n int
     if n, err = tempWS.Read(msg); err != nil {
-        log.Fatal(err)
+        log.Fatal("(RetrieveSockets) ",err)
     }
 
     // Construct Client and P2P Websocket Addresses
     clientPort, err := strconv.Atoi(string(msg[:n]))
     if err != nil {
-        log.Fatal(err)
+        log.Fatal("(RetrieveSockets) ",err)
     }
     cws_addr = strings.Join([]string{":",strconv.Itoa(clientPort)},"");
     psoc_addr = strings.Join([]string{":",strconv.Itoa(clientPort+1)},"");
@@ -187,6 +192,19 @@ func ReceiveFromPeers(l net.Listener) {
 }
 
 func ReceivePeerMessage(c net.Conn) (PeerMessage,bool) {
+    // msg_encrypted := make([]byte, 512)
+    // _, err := c.Read(msg_encrypted)
+    // if err != nil {
+    //     log.Fatal(err)
+    // }
+    // msg_unverified, err := rsa.DecryptPKCS1v15(rand.Reader, &pvkey, msg_encrypted)
+    // if err != nil {
+    //     log.Fatal(err)
+    // }
+    // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)
+    // msg_verified := msg_unverified
+    // r := io.Reader
+    // d := json.NewDecoder(bytes.NewReader(msg_verified))
     d := json.NewDecoder(c)
     var pmsg PeerMessage
     err := d.Decode(&pmsg)
@@ -263,6 +281,14 @@ func RandomID() string {
 }
 
 func main() {
+
+    // Generate Private and Public Key
+    pvkey, err := rsa.GenerateKey(rand.Reader, 32)
+    pbkey = pvkey.PublicKey
+    fmt.Println(pvkey.D)
+    fmt.Println(pvkey.Primes)
+    fmt.Println(pvkey.N)
+    fmt.Println(pvkey.E)
 
     // ONLY FOR LOCAL TESTING
     RetrieveSockets()
