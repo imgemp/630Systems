@@ -48,6 +48,7 @@ type Command struct {
 type ClientMessage struct {
     Body Command
     PR map[string]int
+    Addr string
 }
 
 type ServerInit struct {
@@ -87,7 +88,7 @@ var (
 const (
     VIEWER int = 0
     EDITOR int = 1
-    MASTER int = 2
+    DIRECTOR int = 2
 )
 
 func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
@@ -109,15 +110,14 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
     binary.LittleEndian.PutUint32(total_bytes_bytes,total_bytes)
     packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, total_bytes_bytes, nil)
     encrypted_packets = append(encrypted_packets,packet)
-    fmt.Printf("OAEP encrypted [%d] to \n[%x]\n", total_bytes, packet)
-
+    // fmt.Printf("OAEP encrypted [%d] to \n[%x]\n", total_bytes, packet)
     for packet_num := 0; packet_num < full_packets; packet_num++ {
-        fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
+        // fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
         packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Fatal("(EncryptMessage) ",err)
         } else {
-            fmt.Printf("...to [%x]\n", packet)
+            // fmt.Printf("...to [%x]\n", packet)
             encrypted_packets = append(encrypted_packets,packet)
         }
     }
@@ -125,7 +125,7 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
     if err != nil {
         log.Fatal("(EncryptMessage) ",err)
     } else {
-        fmt.Printf("OAEP encrypted [%s] to \n[%x]\n", string(msg[packet_size*full_packets:]), packet)
+        // fmt.Printf("OAEP encrypted [%s] to \n[%x]\n", string(msg[packet_size*full_packets:]), packet)
         encrypted_packets = append(encrypted_packets,packet)
     }
     return bytes.Join(encrypted_packets,nil)
@@ -138,12 +138,12 @@ func DecryptMessage(msg []byte) []byte {
     var packet_size int = key_len/8 // key_len measured in bits and each byte is 8 bits
     var full_packets int = msg_len/packet_size
     for packet_num := 0; packet_num < full_packets; packet_num++ {
-        fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
+        // fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
         packet, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Fatal("(DecryptMessage) ",err)
         } else {
-            fmt.Printf("...to [%s]\n", packet)
+            // fmt.Printf("...to [%s]\n", packet)
             decrypted_packets = append(decrypted_packets,packet)
         }
     }
@@ -157,7 +157,6 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
     }
 
     md5hash := md5.New()
-    fmt.Println("ReadWebSocket: ",pvkey)
     total_bytes_bytes, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, total_bytes_bytes_encrypted, nil)
     if err != nil {
         log.Println("(ReadWebSocket) Decryption: ",err)
@@ -166,11 +165,11 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
     var total_bytes uint32
     total_bytes = binary.LittleEndian.Uint32(total_bytes_bytes)
 
-    fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
+    // fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
 
     msg := make([]byte, total_bytes)
     if _, err := ws.Read(msg); err != nil {
-        log.Println("(ReadWebSocket): Read Msg ",err)
+        log.Println("(ReadWebSocket) Read Msg: ",err)
     }
     return msg
 }
@@ -178,23 +177,23 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
 func ReadTCPSocket(c net.Conn) []byte {
     total_bytes_bytes_encrypted := make([]byte,key_len/8)
     if _, err := c.Read(total_bytes_bytes_encrypted); err != nil {
-        log.Println("(ReadTCPSocket) ",err)
+        log.Println("(ReadTCPSocket) Read Total Bytes: ",err)
     }
 
     md5hash := md5.New()
     total_bytes_bytes, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, total_bytes_bytes_encrypted, nil)
     if err != nil {
-        log.Println("(ReadTCPSocket) ",err)
+        log.Println("(ReadTCPSocket) Decryption: ",err)
     }
 
     var total_bytes uint32
     total_bytes = binary.LittleEndian.Uint32(total_bytes_bytes)
 
-    fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
+    // fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
 
     msg := make([]byte, total_bytes)
     if _, err := c.Read(msg); err != nil {
-        log.Println("(ReadTCPSocket) ",err)
+        log.Println("(ReadTCPSocket) Read Msg: ",err)
     }
     return msg
 }
@@ -232,7 +231,7 @@ func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
     } else {
         fmt.Println("Received info from server")
         fmt.Println(smsg)
-        UpdatePeers(smsg.PR,smsg.PK)
+        UpdatePeers_SRKC(smsg.PK,smsg.PR)
         cws_addr = smsg.CWS_addr
         psoc_addr = smsg.PSOC_addr
     }
@@ -269,6 +268,11 @@ func ReceiveFromClient(ws *websocket.Conn) {
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
             fmt.Printf("\tPR: %s\n",cmsg.PR)
+            fmt.Printf("\tAddr: %s\n",cmsg.Addr)
+            if cmd.Action == "NewPeer" {
+                cmsg.PR = myPeerRank.m
+                in <- cmsg
+            }
         }
     }
 }
@@ -287,12 +291,13 @@ func SendToClient(ws *websocket.Conn) {
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
             fmt.Printf("\tPR: %s\n",cmsg.PR)
+            fmt.Printf("\tAddr: %s\n",cmsg.Addr)
         }
     }
 }
 
 // Union Input Peer Maps with Local Peer Info
-func UpdatePeers(PR map[string]int, PK map[string]rsa.PublicKey) {
+func UpdatePeers_SRKC(PK map[string]rsa.PublicKey, PR map[string]int) {
     for addr, _ := range PR { // could also have chosen PK for range
         if _, ok := myPeerStat.m[addr]; !ok {
             myPeerStat.mu.Lock()
@@ -303,6 +308,26 @@ func UpdatePeers(PR map[string]int, PK map[string]rsa.PublicKey) {
             myPeerRank.mu.Lock()
             myPeerRank.m[addr] = PR[addr]
             myPeerRank.mu.Unlock()
+        }
+        if _, ok := myPeerKeys.m[addr]; !ok {
+            myPeerKeys.mu.Lock()
+            myPeerKeys.m[addr] = PK[addr]
+            myPeerKeys.mu.Unlock()
+        }
+        if _, ok := myPeerChans.m[addr]; !ok {
+            myPeerChans.mu.Lock()
+            myPeerChans.m[addr] = make(chan PeerMessage)
+            myPeerChans.mu.Unlock()
+        }
+    }
+}
+
+func UpdatePeers_SKC(PK map[string]rsa.PublicKey) {
+    for addr, _ := range PK {
+        if _, ok := myPeerStat.m[addr]; !ok {
+            myPeerStat.mu.Lock()
+            myPeerStat.m[addr] = 0
+            myPeerStat.mu.Unlock()
         }
         if _, ok := myPeerKeys.m[addr]; !ok {
             myPeerKeys.mu.Lock()
@@ -338,7 +363,9 @@ func ReceiveFromPeers(l net.Listener) {
             cmsg := ClientMessage{
                 Body: cmd,
                 PR: pmsg.PR,
+                Addr: pmsg.Addr,
             }
+            UpdatePeers_SKC(pmsg.PK)
             fmt.Println("(ReceiveFromPeers) Success")
             fmt.Printf("\tm.ID: %s\n",pmsg.ID)
             fmt.Printf("\tm.Addr: %s\n",pmsg.Addr)
@@ -457,7 +484,8 @@ func DialPeer(addr string, ch chan PeerMessage) {
         return
     }
     // sign message
-    pmsg_encrypted := EncryptMessage(pmsg_bytes,pbkey) // need peer's public key
+    peer_pbkey := myPeerKeys.m[addr]
+    pmsg_encrypted := EncryptMessage(pmsg_bytes,&peer_pbkey)
     if _, err := c.Write(pmsg_encrypted); err != nil {
         log.Println("(DialPeer) JSON Error: <", addr, "> ", err)
         return

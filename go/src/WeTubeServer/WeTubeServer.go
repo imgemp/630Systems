@@ -53,7 +53,7 @@ var (
 const (
     VIEWER int = 0
     EDITOR int = 1
-    MASTER int = 2
+    DIRECTOR int = 2
 )
 
 func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
@@ -75,15 +75,15 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
     binary.LittleEndian.PutUint32(total_bytes_bytes,total_bytes)
     packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, total_bytes_bytes, nil)
     encrypted_packets = append(encrypted_packets,packet)
-    fmt.Printf("OAEP encrypted [%d] to \n[%x]\n", total_bytes, packet)
+    // fmt.Printf("OAEP encrypted [%d] to \n[%x]\n", total_bytes, packet)
 
     for packet_num := 0; packet_num < full_packets; packet_num++ {
-        fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
+        // fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
         packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Fatal("(EncryptMessage) ",err)
         } else {
-            fmt.Printf("...to [%x]\n", packet)
+            // fmt.Printf("...to [%x]\n", packet)
             encrypted_packets = append(encrypted_packets,packet)
         }
     }
@@ -91,7 +91,7 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
     if err != nil {
         log.Fatal("(EncryptMessage) ",err)
     } else {
-        fmt.Printf("OAEP encrypted [%s] to \n[%x]\n", string(msg[packet_size*full_packets:]), packet)
+        // fmt.Printf("OAEP encrypted [%s] to \n[%x]\n", string(msg[packet_size*full_packets:]), packet)
         encrypted_packets = append(encrypted_packets,packet)
     }
     return bytes.Join(encrypted_packets,nil)
@@ -104,12 +104,12 @@ func DecryptMessage(msg []byte) []byte {
     var packet_size int = key_len/8 // key_len measured in bits and each byte is 8 bits
     var full_packets int = msg_len/packet_size
     for packet_num := 0; packet_num < full_packets; packet_num++ {
-        fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
+        // fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
         packet, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Fatal("(DecryptMessage) ",err)
         } else {
-            fmt.Printf("...to [%s]\n", packet)
+            // fmt.Printf("...to [%s]\n", packet)
             decrypted_packets = append(decrypted_packets,packet)
         }
     }
@@ -131,7 +131,7 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
     var total_bytes uint32
     total_bytes = binary.LittleEndian.Uint32(total_bytes_bytes)
 
-    fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
+    // fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
 
     msg := make([]byte, total_bytes)
     if _, err := ws.Read(msg); err != nil {
@@ -158,7 +158,7 @@ func ServeGo(ws *websocket.Conn) {
     cws_addr := strings.Join([]string{":",strconv.Itoa(Port)},"")
     psoc_addr := strings.Join([]string{":",strconv.Itoa(Port+1)},"")
     if len(myPeerRank.m) == 0 {
-        myPeerRank.m[psoc_addr] = MASTER
+        myPeerRank.m[psoc_addr] = DIRECTOR
     } else {
         myPeerRank.m[psoc_addr] = VIEWER
     }

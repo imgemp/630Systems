@@ -48,7 +48,7 @@ function playVideo(): void {
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PI: myPeerInfo};
+  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
   cws.send(JSON.stringify(msg));
   console.log("(playVideo) Play")
 }
@@ -60,7 +60,7 @@ function pauseVideo(): void {
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PI: myPeerInfo};
+  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
   cws.send(JSON.stringify(msg));
   console.log("(pauseVideo) Pause")
 }
@@ -72,7 +72,7 @@ function stopVideo(): void {
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PI: myPeerInfo};
+  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
   cws.send(JSON.stringify(msg));
   console.log("(stopVideo) Stop")
 }
@@ -84,49 +84,124 @@ function seekTo(seconds: number): void {
     Argument: seconds.toString(),
     Target: null,
   };
-  var msg = {Body: cmd, PI: myPeerInfo};
+  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
   cws.send(JSON.stringify(msg));
   console.log("(seekTo) SeekTo "+seconds.toString()+" Seconds")
 }
 
-function ChangeRank(fromRank: string,toRank: string): void {
-  var index = (<HTMLSelectElement>document.getElementById(fromRank)).selectedIndex;
-  var option = (<HTMLSelectElement>document.getElementById(fromRank)).options[index];
-  (<HTMLSelectElement>document.getElementById(fromRank)).remove(index);
-  (<HTMLSelectElement>document.getElementById(toRank)).add(option);
-  console.log("(ChangeRank) "+fromRank+" to "+toRank+": "+option.text);
+function ChangeRankHTML(fromRank: string,toRank: string,index: number): void {
+  if (index > 0) {
+    var option = (<HTMLSelectElement>document.getElementById(fromRank)).options[index];
+    (<HTMLSelectElement>document.getElementById(fromRank)).remove(index);
+    (<HTMLSelectElement>document.getElementById(toRank)).add(option);
+    myPeerRank[option.text] = Str2Rank(toRank)
+    myPeerIndex[option.text] = (<HTMLSelectElement>document.getElementById(toRank)).length-1
+    console.log("(ChangeRankHTML) "+fromRank+" to "+toRank+": "+option.text);
+  }
 }
 
 function PromoteEditor(): void {
-  ChangeRank('Editor','Master');
+  var index = (<HTMLSelectElement>document.getElementById("Editor")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Editor")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Director",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(PromoteEditor) Editor->Director")
+    ChangeRankHTML('Editor','Director',index);
+  }
 }
 
-function DemoteMaster(): void {
-  ChangeRank('Master','Editor');
+function DemoteDirector(): void {
+  var index = (<HTMLSelectElement>document.getElementById("Director")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Director")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Editor",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(DemoteDirector) Director->Editor")
+    ChangeRankHTML('Director','Editor',index);
+  }
 }
 
 function PromoteViewer(): void {
-  ChangeRank('Viewer','Editor');
+  var index = (<HTMLSelectElement>document.getElementById("Viewer")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Viewer")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Editor",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(PromoteViewer) Viewer->Editor")
+    ChangeRankHTML('Viewer','Editor',index);
+  }
 }
 
 function DemoteEditor(): void {
-  ChangeRank('Editor','Viewer')
+  var index = (<HTMLSelectElement>document.getElementById("Editor")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Editor")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Viewer",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(DemoteEditor) Editor->Viewer")
+    ChangeRankHTML('Editor','Viewer',index)
+  }
 }
 
 function KingViewer(): void {
-  ChangeRank('Viewer','Master');
+  var index = (<HTMLSelectElement>document.getElementById("Viewer")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Viewer")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Director",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(KingViewer) Viewer->Director")
+    ChangeRankHTML('Viewer','Director',index);
+  }
 }
 
-function CrushMaster(): void {
-  ChangeRank('Master','Viewer');
+function CrushDirector(): void {
+  var index = (<HTMLSelectElement>document.getElementById("Director")).selectedIndex;
+  if (index > 0) {
+    var addr: string = (<HTMLSelectElement>document.getElementById("Director")).options[index].text;
+    var cmd = {
+      Action: "ChangeRank",
+      Argument: "Viewer",
+      Target: addr,
+    };
+    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    cws.send(JSON.stringify(msg));
+    console.log("(CrushDirector) Director->Viewer")
+    ChangeRankHTML('Director','Viewer',index);
+  }
 }
 
 // Connect to Client WebSocket
-function ClientWebSocket() {
+function ClientWebSocket(): void {
     cws = new WebSocket(cws_addr, "protocolOne");
     cws.onopen = function (event) {
       var cmd = {Action: "NewPeer", Argument: null, Target: null};
-      var msg = {Body: cmd, PI: myPeerInfo};
+      var msg = {Body: cmd, PR: myPeerRank};
       cws.send(JSON.stringify(msg));
       console.log("(ClientWebSocket/onopen)");
       console.log(msg);
@@ -141,38 +216,81 @@ function ClientWebSocket() {
     }
 }
 
-// Update myPeerInfo & HTML Ranks
-function UpdatePeers(PI: any) {
-  for (var addr in PI) {
-    if (!myPeerInfo[addr]) {
-      myPeerInfo[addr] = PI[addr];
-      AddHTMLRank(addr,PI[addr]);
+// Update myPeerRank & HTML Ranks
+function UpdatePeers(PR: any): void {
+  for (var addr in PR) {
+    if (!myPeerRank[addr]) {
+      myPeerRank[addr] = PR[addr];
+      var index = AddHTMLRank(addr,PR[addr]);
+      if (index >= 0) {
+        myPeerIndex[addr] = index
+      }
     }
   }
 }
 
+function Rank2Str(rank: number): string {
+  switch(rank) {
+    case Rank.Director:
+      return "Director"
+    case Rank.Editor:
+      return "Editor"
+    case Rank.Viewer:
+      return "Viewer"
+    default:
+      return null
+  }
+}
+
+function Str2Rank(rank: string): number {
+  switch(rank) {
+    case "Director":
+      return Rank.Director
+    case "Editor":
+      return Rank.Editor
+    case "Viewer":
+      return Rank.Viewer
+    default:
+      return null
+  }
+}
+
 // Handle Peer Messages
-function HandleMessage(msg: any) {
+function HandleMessage(msg: any): void {
   switch(msg.Body.Action) {
     case "NewPeer":
       console.log("(HandleMessage) NewPeer");
-      UpdatePeers(msg.PI)
+      UpdatePeers(msg.PR)
       break;
     case "Play":
-      console.log("(HandleMessage) Play");
-      player.playVideo();
+      if (myPeerRank[msg.Addr] > 0) {
+        console.log("(HandleMessage) Play");
+        player.playVideo();
+      }
       break;
     case "Pause":
-      console.log("(HandleMessage) Pause");
-      player.pauseVideo();
+      if (myPeerRank[msg.Addr] > 0) {
+        console.log("(HandleMessage) Pause");
+        player.pauseVideo();
+      }
       break;
     case "Stop":
-      console.log("(HandleMessage) Stop");
-      player.stopVideo();
+      if (myPeerRank[msg.Addr] > 0) {
+        console.log("(HandleMessage) Stop");
+        player.stopVideo();
+      }
       break;
     case "SeekTo":
-      console.log("(HandleMessage) SeekTo");
-      player.seekTo(msg.Body.Argument,true);
+      if (myPeerRank[msg.Addr] > 0) {
+        console.log("(HandleMessage) SeekTo");
+        player.seekTo(msg.Body.Argument,true);
+      }
+      break;
+    case "ChangeRank":
+      if (myPeerRank[msg.Addr] > 1) {
+        console.log("(HandleMessage) ChangeRank");
+        ChangeRankHTML(Rank2Str(myPeerRank[msg.Body.Target]),msg.Body.Argument,myPeerIndex[msg.Body.Target])
+      }
       break;
     default:
       console.log("(HandleMessage) Command Not Recognized");
@@ -180,44 +298,52 @@ function HandleMessage(msg: any) {
 }
 
 // Populate HTML Ranks on Startup
-function PopulateHTMLRanks() {
-  for (var addr in myPeerInfo) {
-    AddHTMLRank(addr,myPeerInfo[addr]);
+function PopulateHTMLRanks(): void {
+  for (var addr in myPeerRank) {
+    var index = AddHTMLRank(addr,myPeerRank[addr]);
+    if (index >= 0) {
+      myPeerIndex[addr] = index
+    }
   }
 }
 
 // Update Single HTML Rank - might want to make this check to see if addr is already in rank list or somewhere in ranks
-function AddHTMLRank(addr: string, rank: number) {
+function AddHTMLRank(addr: string, rank: number): number {
   var option = document.createElement("option");
   option.text = addr;
   switch(rank) {
-  case Rank.Master:
-    console.log("(UpdateHTMLRank) Adding Master");
-    (<HTMLSelectElement>document.getElementById('Master')).add(option);
+  case Rank.Director:
+    console.log("(AddHTMLRank) Adding Director");
+    (<HTMLSelectElement>document.getElementById('Director')).add(option);
+    return (<HTMLSelectElement>document.getElementById('Director')).length-1
     break;
   case Rank.Editor:
-    console.log("(UpdateHTMLRank) Adding Editor");
+    console.log("(AddHTMLRank) Adding Editor");
     (<HTMLSelectElement>document.getElementById('Editor')).add(option);
+    return (<HTMLSelectElement>document.getElementById('Director')).length-1
     break;
   case Rank.Viewer:
-    console.log("(UpdateHTMLRank) Adding Viewer");
+    console.log("(AddHTMLRank) Adding Viewer");
     (<HTMLSelectElement>document.getElementById('Viewer')).add(option);
+    return (<HTMLSelectElement>document.getElementById('Director')).length-1
     break;
   default:   
-    console.log("(UpdateHTMLRank) Rank Not Recognized");
+    console.log("(AddHTMLRank) Rank Not Recognized");
+    return -1
   }
 }
 
 enum Rank {
   Viewer = 0,
   Editor = 1,
-  Master = 2
+  Director = 2
 }
 
 // Establish WebSocket Connection with WeTube (Go) Client
 var cws_addr: string;
 var cws: WebSocket;
-var myPeerInfo: any;
+var myPeerRank: any = {};
+var myPeerIndex: any = {};
 var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 sws.onmessage = function (event) {
   cws_addr = "ws://localhost"+JSON.parse(event.data)+"/ws"
