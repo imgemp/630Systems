@@ -20,19 +20,26 @@ import (
 
 // Types and Globals
 
-type PeerInfo struct {
+type PeerRank struct {
     m  map[string]int
+    mu sync.RWMutex
+}
+
+type PeerKeys struct {
+    m  map[string]rsa.PublicKey
     mu sync.RWMutex
 }
 
 type Init struct {
     CWS_addr string
     PSOC_addr string
-    PI map[string]int
+    PR map[string]int
+    PK map[string]rsa.PublicKey
 }
 
 var (
-    myPeerInfo = &PeerInfo{m: make(map[string]int)} // Map of Peer Addresses to Permission Levels
+    myPeerRank = &PeerRank{m: make(map[string]int)} // Map of Peer Addresses to Permission Levels
+    myPeerKeys = &PeerKeys{m: make(map[string]rsa.PublicKey)} // Map of Peer Addresses to Public Keys
 
     key_len int
     pvkey *rsa.PrivateKey
@@ -150,15 +157,17 @@ func ServeGo(ws *websocket.Conn) {
     // Send Init Package to Go Client
     cws_addr := strings.Join([]string{":",strconv.Itoa(Port)},"")
     psoc_addr := strings.Join([]string{":",strconv.Itoa(Port+1)},"")
-    if len(myPeerInfo.m) == 0 {
-        myPeerInfo.m[psoc_addr] = MASTER
+    if len(myPeerRank.m) == 0 {
+        myPeerRank.m[psoc_addr] = MASTER
     } else {
-        myPeerInfo.m[psoc_addr] = VIEWER
+        myPeerRank.m[psoc_addr] = VIEWER
     }
+    myPeerKeys.m[psoc_addr] = *go_pbkey
     init := Init{
         CWS_addr: cws_addr,
         PSOC_addr: psoc_addr,
-        PI: myPeerInfo.m,
+        PR: myPeerRank.m,
+        PK: myPeerKeys.m,
     }
     init_bytes, err := json.Marshal(init)
     if err != nil {
@@ -167,7 +176,8 @@ func ServeGo(ws *websocket.Conn) {
     // sign message
     init_encrypted := EncryptMessage(init_bytes,go_pbkey)
     if _, err := ws.Write(init_encrypted); err != nil {
-        delete(myPeerInfo.m,psoc_addr)
+        delete(myPeerRank.m,psoc_addr)
+        delete(myPeerKeys.m,psoc_addr)
         log.Println("(ServeGo) JSON Error: ",err)
     } else {
         JSPortList = append(JSPortList,Port)
@@ -175,7 +185,8 @@ func ServeGo(ws *websocket.Conn) {
         fmt.Println("(ServeGo) Success")
         fmt.Printf("\tinit.cws_addr: %s\n",init.CWS_addr)
         fmt.Printf("\tinit.psoc_addr: %s\n",init.PSOC_addr)
-        fmt.Printf("\tinit.PI: %s\n",init.PI)
+        fmt.Printf("\tinit.PR: %s\n",init.PR)
+        fmt.Printf("\tinit.PK: %s\n",init.PK)
     }
 }
 

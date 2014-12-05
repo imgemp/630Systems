@@ -19,8 +19,18 @@ import (
 
 // Types and Globals
 
-type PeerInfo struct {
+type PeerStat struct {
     m  map[string]int
+    mu sync.RWMutex
+}
+
+type PeerRank struct {
+    m  map[string]int
+    mu sync.RWMutex
+}
+
+type PeerKeys struct {
+    m  map[string]rsa.PublicKey
     mu sync.RWMutex
 }
 
@@ -35,29 +45,33 @@ type Command struct {
     Target string
 }
 
-type PeerMessage struct {
-    ID   string
-    Addr string
-    Body Command
-    PI map[string]int
-}
-
 type ClientMessage struct {
     Body Command
-    PI map[string]int
+    PR map[string]int
 }
 
 type ServerInit struct {
     CWS_addr string
     PSOC_addr string
-    PI map[string]int
+    PR map[string]int
+    PK map[string]rsa.PublicKey
+}
+
+type PeerMessage struct {
+    ID   string
+    Addr string
+    Body Command
+    PR map[string]int
+    PK map[string]rsa.PublicKey
 }
 
 var (
     cws_addr string
     psoc_addr string
 
-    myPeerInfo = &PeerInfo{m: make(map[string]int)} // Map of Peer Addresses to Permission Levels
+    myPeerStat = &PeerStat{m: make(map[string]int)} // Map of Peer Addresses to Consecutive Failed Connection Count
+    myPeerRank = &PeerRank{m: make(map[string]int)} // Map of Peer Addresses to Permission Levels
+    myPeerKeys = &PeerKeys{m: make(map[string]rsa.PublicKey)} // Map of Peer Addresses to Public Keys
     myPeerChans = &PeerChans{m: make(map[string]chan PeerMessage)} // Map of Peer Addresses to Channels
 
     out chan PeerMessage
@@ -218,7 +232,7 @@ func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
     } else {
         fmt.Println("Received info from server")
         fmt.Println(smsg)
-        UpdatePeers(smsg.PI)
+        UpdatePeers(smsg.PR,smsg.PK)
         cws_addr = smsg.CWS_addr
         psoc_addr = smsg.PSOC_addr
     }
@@ -246,14 +260,15 @@ func ReceiveFromClient(ws *websocket.Conn) {
                 ID: RandomID(),
                 Addr: psoc_addr,
                 Body: cmd,
-                PI: myPeerInfo.m,
+                PR: myPeerRank.m,
+                PK: myPeerKeys.m,
             }
             out <- pmsg
             fmt.Println("(ReceiveFromClient) Success")
             fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
-            fmt.Printf("\tPI: %s\n",cmsg.PI)
+            fmt.Printf("\tPR: %s\n",cmsg.PR)
         }
     }
 }
@@ -271,23 +286,33 @@ func SendToClient(ws *websocket.Conn) {
             fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
-            fmt.Printf("\tPI: %s\n",cmsg.PI)
+            fmt.Printf("\tPR: %s\n",cmsg.PR)
         }
     }
 }
 
-// Union Input Peer Map with Local Peer Info & Channels
-func UpdatePeers(PI map[string]int) {
-    for addr, rank := range PI {
+// Union Input Peer Maps with Local Peer Info
+func UpdatePeers(PR map[string]int, PK map[string]rsa.PublicKey) {
+    for addr, _ := range PR { // could also have chosen PK for range
+        if _, ok := myPeerStat.m[addr]; !ok {
+            myPeerStat.mu.Lock()
+            myPeerStat.m[addr] = 0
+            myPeerStat.mu.Unlock()
+        }
+        if _, ok := myPeerRank.m[addr]; !ok {
+            myPeerRank.mu.Lock()
+            myPeerRank.m[addr] = PR[addr]
+            myPeerRank.mu.Unlock()
+        }
+        if _, ok := myPeerKeys.m[addr]; !ok {
+            myPeerKeys.mu.Lock()
+            myPeerKeys.m[addr] = PK[addr]
+            myPeerKeys.mu.Unlock()
+        }
         if _, ok := myPeerChans.m[addr]; !ok {
             myPeerChans.mu.Lock()
             myPeerChans.m[addr] = make(chan PeerMessage)
             myPeerChans.mu.Unlock()
-        }
-        if _, ok := myPeerInfo.m[addr]; !ok {
-            myPeerInfo.mu.Lock()
-            myPeerInfo.m[addr] = rank
-            myPeerInfo.mu.Unlock()
         }
     }
 }
@@ -312,13 +337,14 @@ func ReceiveFromPeers(l net.Listener) {
             }
             cmsg := ClientMessage{
                 Body: cmd,
-                PI: pmsg.PI,
+                PR: pmsg.PR,
             }
             fmt.Println("(ReceiveFromPeers) Success")
             fmt.Printf("\tm.ID: %s\n",pmsg.ID)
             fmt.Printf("\tm.Addr: %s\n",pmsg.Addr)
             fmt.Printf("\tm.Body: %s\n",pmsg.Body)
-            fmt.Printf("\tm.PI: %s\n",pmsg.PI)
+            fmt.Printf("\tm.PR: %s\n",pmsg.PR)
+            fmt.Printf("\tm.PK: %s\n",pmsg.PK)
             in <- cmsg
         }
     }
@@ -347,11 +373,48 @@ func SendToPeers() {
         fmt.Printf("\tm.ID: %s\n",pmsg.ID)
         fmt.Printf("\tm.Addr: %s\n",pmsg.Addr)
         fmt.Printf("\tm.Body: %s\n",pmsg.Body)
-        fmt.Printf("\tm.PI: %s\n",pmsg.PI)
+        fmt.Printf("\tm.PR: %s\n",pmsg.PR)
+        fmt.Printf("\tm.PK: %s\n",pmsg.PK)
         myPeerChans_copy := myPeerChans.Copy()
         go AddToChannels(pmsg,myPeerChans_copy)
         go DistributeToPeers(myPeerChans_copy)
     }
+}
+
+func (p *PeerStat) Copy() (map[string]int) {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    copy := make(map[string]int)
+    for addr, stat := range p.m {
+        if addr != psoc_addr {
+            copy[addr] = stat
+        }
+    }
+    return copy
+}
+
+func (p *PeerRank) Copy() (map[string]int) {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    copy := make(map[string]int)
+    for addr, rank := range p.m {
+        if addr != psoc_addr {
+            copy[addr] = rank
+        }
+    }
+    return copy
+}
+
+func (p *PeerKeys) Copy() (map[string]rsa.PublicKey) {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    copy := make(map[string]rsa.PublicKey)
+    for addr, peer_pbkey := range p.m {
+        if addr != psoc_addr {
+            copy[addr] = peer_pbkey
+        }
+    }
+    return copy
 }
 
 func (p *PeerChans) Copy() (map[string]chan PeerMessage) {
