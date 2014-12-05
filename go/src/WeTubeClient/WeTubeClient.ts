@@ -220,10 +220,8 @@ var cws: WebSocket;
 var myPeerInfo: any;
 var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 sws.onmessage = function (event) {
-  var init = JSON.parse(event.data)
-  cws_addr = "ws://localhost:"+init.Port+"/ws"
-  myPeerInfo = init.PI;
-  PopulateHTMLRanks();
+  cws_addr = "ws://localhost"+JSON.parse(event.data)+"/ws"
+  // PopulateHTMLRanks();
   ClientWebSocket();
   sws.close();
 }

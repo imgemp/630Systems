@@ -3,9 +3,11 @@
 // This just adds a youtube iframe to the div in the html
 // 2. This code loads the IFrame Player API code asynchronously.
 var tag = document.createElement('script');
+
 tag.src = "https://www.youtube.com/iframe_api";
 var firstScriptTag = document.getElementsByTagName('script')[0];
 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
 // 3. This function creates an <iframe> (and YouTube player)
 //    after the API code downloads.
 var player;
@@ -24,15 +26,18 @@ function onYouTubeIframeAPIReady() {
     });
     console.log("(onYouTubeIframeAPIReady) Player Ready");
 }
+
 // 4. The API will call this function when the video player is ready.
 function onPlayerReady(event) {
 }
+
 // 5. The API calls this function when the player's state changes.
 //    The function indicates that when playing a video (state=1),
 //    the player should play for six seconds and then stop.
 var done = false;
 function onPlayerStateChange(event) {
 }
+
 // OnClick Video Commands
 function playVideo() {
     player.playVideo();
@@ -45,6 +50,7 @@ function playVideo() {
     cws.send(JSON.stringify(msg));
     console.log("(playVideo) Play");
 }
+
 function pauseVideo() {
     player.pauseVideo();
     var cmd = {
@@ -56,6 +62,7 @@ function pauseVideo() {
     cws.send(JSON.stringify(msg));
     console.log("(pauseVideo) Pause");
 }
+
 function stopVideo() {
     player.stopVideo();
     var cmd = {
@@ -67,6 +74,7 @@ function stopVideo() {
     cws.send(JSON.stringify(msg));
     console.log("(stopVideo) Stop");
 }
+
 function seekTo(seconds) {
     player.seekTo(seconds, true);
     var cmd = {
@@ -78,6 +86,7 @@ function seekTo(seconds) {
     cws.send(JSON.stringify(msg));
     console.log("(seekTo) SeekTo " + seconds.toString() + " Seconds");
 }
+
 function ChangeRank(fromRank, toRank) {
     var index = document.getElementById(fromRank).selectedIndex;
     var option = document.getElementById(fromRank).options[index];
@@ -85,24 +94,31 @@ function ChangeRank(fromRank, toRank) {
     document.getElementById(toRank).add(option);
     console.log("(ChangeRank) " + fromRank + " to " + toRank + ": " + option.text);
 }
+
 function PromoteEditor() {
     ChangeRank('Editor', 'Master');
 }
+
 function DemoteMaster() {
     ChangeRank('Master', 'Editor');
 }
+
 function PromoteViewer() {
     ChangeRank('Viewer', 'Editor');
 }
+
 function DemoteEditor() {
     ChangeRank('Editor', 'Viewer');
 }
+
 function KingViewer() {
     ChangeRank('Viewer', 'Master');
 }
+
 function CrushMaster() {
     ChangeRank('Master', 'Viewer');
 }
+
 // Connect to Client WebSocket
 function ClientWebSocket() {
     cws = new WebSocket(cws_addr, "protocolOne");
@@ -122,6 +138,7 @@ function ClientWebSocket() {
         console.log("(ClientWebSocket) WebSocket Closing...", event.code, event.reason);
     };
 }
+
 // Update myPeerInfo & HTML Ranks
 function UpdatePeers(PI) {
     for (var addr in PI) {
@@ -131,6 +148,7 @@ function UpdatePeers(PI) {
         }
     }
 }
+
 // Handle Peer Messages
 function HandleMessage(msg) {
     switch (msg.Body.Action) {
@@ -158,12 +176,14 @@ function HandleMessage(msg) {
             console.log("(HandleMessage) Command Not Recognized");
     }
 }
+
 // Populate HTML Ranks on Startup
 function PopulateHTMLRanks() {
     for (var addr in myPeerInfo) {
         AddHTMLRank(addr, myPeerInfo[addr]);
     }
 }
+
 // Update Single HTML Rank - might want to make this check to see if addr is already in rank list or somewhere in ranks
 function AddHTMLRank(addr, rank) {
     var option = document.createElement("option");
@@ -185,22 +205,23 @@ function AddHTMLRank(addr, rank) {
             console.log("(UpdateHTMLRank) Rank Not Recognized");
     }
 }
+
 var Rank;
 (function (Rank) {
     Rank[Rank["Viewer"] = 0] = "Viewer";
     Rank[Rank["Editor"] = 1] = "Editor";
     Rank[Rank["Master"] = 2] = "Master";
 })(Rank || (Rank = {}));
+
 // Establish WebSocket Connection with WeTube (Go) Client
 var cws_addr;
 var cws;
 var myPeerInfo;
 var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 sws.onmessage = function (event) {
-    var init = JSON.parse(event.data);
-    cws_addr = "ws://localhost:" + init.Port + "/ws";
-    myPeerInfo = init.PI;
-    PopulateHTMLRanks();
+    cws_addr = "ws://localhost" + JSON.parse(event.data) + "/ws";
+
+    // PopulateHTMLRanks();
     ClientWebSocket();
     sws.close();
 };
