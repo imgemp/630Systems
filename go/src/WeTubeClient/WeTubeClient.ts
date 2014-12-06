@@ -42,49 +42,53 @@ function onPlayerStateChange(event) {
 
 // OnClick Video Commands
 function playVideo(): void {
-  player.playVideo();
+  // player.playVideo();
   var cmd = {
     Action: "Play",
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+  Seen[msg.ID] = true
   cws.send(JSON.stringify(msg));
   console.log("(playVideo) Play")
 }
 
 function pauseVideo(): void {
-  player.pauseVideo();
+  // player.pauseVideo();
   var cmd = {
     Action: "Pause",
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+  Seen[msg.ID] = true
   cws.send(JSON.stringify(msg));
   console.log("(pauseVideo) Pause")
 }
 
 function stopVideo(): void {
-  player.stopVideo();
+  // player.stopVideo();
   var cmd = {
     Action: "Stop",
     Argument: null,
     Target: null,
   };
-  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+  Seen[msg.ID] = true
   cws.send(JSON.stringify(msg));
   console.log("(stopVideo) Stop")
 }
 
 function seekTo(seconds: number): void {
-  player.seekTo(seconds,true);
+  // player.seekTo(seconds,true);
   var cmd = {
     Action: "SeekTo",
     Argument: seconds.toString(),
     Target: null,
   };
-  var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+  Seen[msg.ID] = true
   cws.send(JSON.stringify(msg));
   console.log("(seekTo) SeekTo "+seconds.toString()+" Seconds")
 }
@@ -109,10 +113,11 @@ function PromoteEditor(): void {
       Argument: "Director",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(PromoteEditor) Editor->Director")
-    ChangeRankHTML('Editor','Director',index);
+    // ChangeRankHTML('Editor','Director',index);
   }
 }
 
@@ -125,10 +130,11 @@ function DemoteDirector(): void {
       Argument: "Editor",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(DemoteDirector) Director->Editor")
-    ChangeRankHTML('Director','Editor',index);
+    // ChangeRankHTML('Director','Editor',index);
   }
 }
 
@@ -141,10 +147,11 @@ function PromoteViewer(): void {
       Argument: "Editor",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
-    console.log("(PromoteViewer) Viewer->Editor")
-    ChangeRankHTML('Viewer','Editor',index);
+    console.log("(PromoteViewer) Viewer->Editor");
+    // ChangeRankHTML('Viewer','Editor',index);
   }
 }
 
@@ -157,10 +164,11 @@ function DemoteEditor(): void {
       Argument: "Viewer",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(DemoteEditor) Editor->Viewer")
-    ChangeRankHTML('Editor','Viewer',index)
+    // ChangeRankHTML('Editor','Viewer',index)
   }
 }
 
@@ -173,10 +181,11 @@ function KingViewer(): void {
       Argument: "Director",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(KingViewer) Viewer->Director")
-    ChangeRankHTML('Viewer','Director',index);
+    // ChangeRankHTML('Viewer','Director',index);
   }
 }
 
@@ -189,10 +198,11 @@ function CrushDirector(): void {
       Argument: "Viewer",
       Target: addr,
     };
-    var msg = {Body: cmd, PR: myPeerRank, Addr: null};
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(CrushDirector) Director->Viewer")
-    ChangeRankHTML('Director','Viewer',index);
+    // ChangeRankHTML('Director','Viewer',index);
   }
 }
 
@@ -255,47 +265,206 @@ function Str2Rank(rank: string): number {
   }
 }
 
-// Handle Peer Messages
+function RemovePeerHTML(addr: string) {
+  var rank = myPeerRank[addr]
+  var index = myPeerIndex[addr]
+  for (var other_addr in myPeerRank) {
+    if ((myPeerRank[other_addr] == rank) && (myPeerIndex[other_addr] > index)) {
+      myPeerIndex[other_addr] -= 1
+    }
+  }
+  (<HTMLSelectElement>document.getElementById(Rank2Str(rank))).remove(index);
+}
+
+function DropPeer(addr: string) {
+  RemovePeerHTML(addr)
+  delete myPeerRank[addr]
+  delete myPeerIndex[addr]
+  var cmd = {
+    Action: "DropPeer",
+    Argument: null, // put vote here?
+    Target: addr,
+  };
+  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+  Seen[msg.ID] = true
+  cws.send(JSON.stringify(msg));
+  console.log("(DropPeer) "+addr);
+}
+
 function HandleMessage(msg: any): void {
-  switch(msg.Body.Action) {
-    case "NewPeer":
-      console.log("(HandleMessage) NewPeer");
-      UpdatePeers(msg.PR)
-      break;
-    case "Play":
-      if (myPeerRank[msg.Addr] > 0) {
-        console.log("(HandleMessage) Play");
+  if (msg.Body.Action == "NewPeer") {
+    console.log("(HandleMessage) NewPeer");
+    UpdatePeers(msg.PR);
+  } else if (msg.Body.Action == "DropPeer") {
+    console.log("(HandleMessage) DropPeer");
+    DropPeer(msg.Body.Target);
+  } else if (Seen[msg.ID]) {
+    switch(msg.Body.Action) {
+      case "Play":
+        console.log("(HandleMessage/Boomerang) Play");
+        cws.send(JSON.stringify(msg));
         player.playVideo();
-      }
-      break;
-    case "Pause":
-      if (myPeerRank[msg.Addr] > 0) {
-        console.log("(HandleMessage) Pause");
+        break;
+      case "Pause":
+        console.log("(HandleMessage/Boomerang) Pause");
+        cws.send(JSON.stringify(msg));
         player.pauseVideo();
-      }
-      break;
-    case "Stop":
-      if (myPeerRank[msg.Addr] > 0) {
-        console.log("(HandleMessage) Stop");
+        break;
+      case "Stop":
+        console.log("(HandleMessage/Boomerang) Stop");
+        cws.send(JSON.stringify(msg));
         player.stopVideo();
-      }
-      break;
-    case "SeekTo":
-      if (myPeerRank[msg.Addr] > 0) {
-        console.log("(HandleMessage) SeekTo");
+        break;
+      case "SeekTo":
+        console.log("(HandleMessage/Boomerang) SeekTo");
+        cws.send(JSON.stringify(msg));
         player.seekTo(msg.Body.Argument,true);
-      }
-      break;
-    case "ChangeRank":
-      if (myPeerRank[msg.Addr] > 1) {
-        console.log("(HandleMessage) ChangeRank");
+        break;
+      case "ChangeRank":
+        console.log("(HandleMessage/Boomerang/ChangeRank) *Mote Editor");
         ChangeRankHTML(Rank2Str(myPeerRank[msg.Body.Target]),msg.Body.Argument,myPeerIndex[msg.Body.Target])
-      }
-      break;
-    default:
-      console.log("(HandleMessage) Command Not Recognized");
+        cws.send(JSON.stringify(msg));
+        break;
+      default:
+        console.log("(HandleMessage/Boomerang) Command "+msg.Body.Action+" Not Recognized");
+    }
+  } else {
+    switch(myPeerRank[msg.Addr]) {
+      case Rank.Director:
+        switch(msg.Body.Action) {
+          case "Play":
+            console.log("(HandleMessage/Director) Play");
+            cws.send(JSON.stringify(msg));
+            player.playVideo();
+            break;
+          case "Pause":
+            console.log("(HandleMessage/Director) Pause");
+            cws.send(JSON.stringify(msg));
+            player.pauseVideo();
+            break;
+          case "Stop":
+            console.log("(HandleMessage/Director) Stop");
+            cws.send(JSON.stringify(msg));
+            player.stopVideo();
+            break;
+          case "SeekTo":
+            console.log("(HandleMessage/Director) SeekTo");
+            cws.send(JSON.stringify(msg));
+            player.seekTo(msg.Body.Argument,true);
+            break;
+          case "ChangeRank":
+            switch(myPeerRank[msg.Body.Target]) {
+              case Rank.Director:
+                console.log("(HandleMessage/Director/ChangeRank) Director Rank Cannot Be Changed");
+                break;
+              case Rank.Editor:
+                console.log("(HandleMessage/Director/ChangeRank) *Mote Editor");
+                ChangeRankHTML("Editor",msg.Body.Argument,myPeerIndex[msg.Body.Target])
+                cws.send(JSON.stringify(msg));
+                break;
+              case Rank.Viewer:
+                console.log("(HandleMessage/Director/ChangeRank) *Mote Viewer");
+                ChangeRankHTML("Viewer",msg.Body.Argument,myPeerIndex[msg.Body.Target])
+                cws.send(JSON.stringify(msg));
+                break;
+              default:
+                console.log("(HandleMessage/Director/ChangeRank) My Rank Of "+myPeerRank[msg.Body.Target]+" Not Recognized");
+            }
+            break;
+          default:
+            console.log("(HandleMessage/Director) "+msg.Body.Action+" Command Not Recognized");
+        }
+        break;
+      case Rank.Editor:
+        switch(msg.Body.Action) {
+          case "Play":
+            console.log("(HandleMessage/Editor) Play");
+            cws.send(JSON.stringify(msg));
+            player.playVideo();
+            break;
+          case "Pause":
+            console.log("(HandleMessage/Editor) Pause");
+            cws.send(JSON.stringify(msg));
+            player.pauseVideo();
+            break;
+          case "Stop":
+            console.log("(HandleMessage/Editor) Stop");
+            cws.send(JSON.stringify(msg));
+            player.stopVideo();
+            break;
+          case "SeekTo":
+            console.log("(HandleMessage/Editor) SeekTo");
+            cws.send(JSON.stringify(msg));
+            player.seekTo(msg.Body.Argument,true);
+            break;
+          case "ChangeRank":
+            console.log("(HandleMessage/Editor) Editor Cannot Change Rank");
+            break;
+          default:
+            console.log("(HandleMessage/Editor) "+msg.Body.Action+" Command Not Recognized");
+        }
+        break;
+      case Rank.Viewer:
+        switch(msg.Body.Action) {
+          case "Play":
+          case "Pause":
+          case "Stop":
+          case "SeekTo":
+          case "ChangeRank":
+            console.log("(HandleMessage/Viewer) Viewer Can Only Watch");
+            break;
+          default:
+            console.log("(HandleMessage/Viewer) Command "+msg.Body.Action+" Not Recognized");
+        }
+        break;
+      default:
+        console.log("(HandleMessage) Rank Of "+myPeerRank[msg.Addr]+" Not Recognized");
+    }
   }
 }
+
+// Handle Peer Messages
+// function HandleMessage(msg: any): void {
+
+//   switch(msg.Body.Action) {
+//     case "NewPeer":
+//       console.log("(HandleMessage) NewPeer");
+//       UpdatePeers(msg.PR)
+//       break;
+//     case "Play":
+//       if (myPeerRank[msg.Addr] > 0) {
+//         console.log("(HandleMessage) Play");
+//         player.playVideo();
+//       }
+//       break;
+//     case "Pause":
+//       if (myPeerRank[msg.Addr] > 0) {
+//         console.log("(HandleMessage) Pause");
+//         player.pauseVideo();
+//       }
+//       break;
+//     case "Stop":
+//       if (myPeerRank[msg.Addr] > 0) {
+//         console.log("(HandleMessage) Stop");
+//         player.stopVideo();
+//       }
+//       break;
+//     case "SeekTo":
+//       if (myPeerRank[msg.Addr] > 0) {
+//         console.log("(HandleMessage) SeekTo");
+//         player.seekTo(msg.Body.Argument,true);
+//       }
+//       break;
+//     case "ChangeRank":
+//       if (myPeerRank[msg.Addr] > 1) {
+//         console.log("(HandleMessage) ChangeRank");
+//         ChangeRankHTML(Rank2Str(myPeerRank[msg.Body.Target]),msg.Body.Argument,myPeerIndex[msg.Body.Target])
+//       }
+//       break;
+//     default:
+//       console.log("(HandleMessage) Command Not Recognized");
+//   }
+// }
 
 // Populate HTML Ranks on Startup
 function PopulateHTMLRanks(): void {
@@ -342,12 +511,16 @@ enum Rank {
 // Establish WebSocket Connection with WeTube (Go) Client
 var cws_addr: string;
 var cws: WebSocket;
+var psoc: string;
 var myPeerRank: any = {};
 var myPeerIndex: any = {};
+var Seen: any = {};
 var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 sws.onmessage = function (event) {
   cws_addr = "ws://localhost"+JSON.parse(event.data)+"/ws"
-  // PopulateHTMLRanks();
+  psoc = ":"+(parseInt(JSON.parse(event.data).slice(1))+1).toString()
+  document.getElementById('psoc').innerHTML = psoc;
+  console.log(psoc)
   ClientWebSocket();
   sws.close();
 }

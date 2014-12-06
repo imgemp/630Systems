@@ -46,6 +46,7 @@ type Command struct {
 }
 
 type ClientMessage struct {
+    ID string
     Body Command
     PR map[string]int
     Addr string
@@ -78,6 +79,11 @@ var (
     out chan PeerMessage
     in chan ClientMessage
     blockExit chan string
+
+    seenIDs = struct {
+        m map[string]bool
+        sync.Mutex
+    }{m: make(map[string]bool)}
 
     key_len int
     pvkey *rsa.PrivateKey
@@ -256,14 +262,18 @@ func ReceiveFromClient(ws *websocket.Conn) {
         } else {
             cmd := cmsg.Body
             pmsg := PeerMessage{
-                ID: RandomID(),
+                ID: cmsg.ID,
                 Addr: psoc_addr,
                 Body: cmd,
                 PR: myPeerRank.m,
                 PK: myPeerKeys.m,
             }
+            if cmd.Action == "DropPeer" {
+                myPeerChans.Remove(cmd.Target)
+            }
             out <- pmsg
             fmt.Println("(ReceiveFromClient) Success")
+            fmt.Printf("\tID: %s\n",cmsg.ID)
             fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
@@ -287,6 +297,7 @@ func SendToClient(ws *websocket.Conn) {
         } else {
             cmd := cmsg.Body
             fmt.Println("(SendToClient) Success")
+            fmt.Printf("\tID: %s\n",cmsg.ID)
             fmt.Printf("\tcmd.Action: %s\n",cmd.Action)
             fmt.Printf("\tcmd.Argument: %s\n",cmd.Argument)
             fmt.Printf("\tcmd.Target: %s\n",cmd.Target)
@@ -355,12 +366,16 @@ func ReceiveFromPeers(l net.Listener) {
             log.Println("(ReceiveFromPeers) Listener Error: <", c.RemoteAddr(), "> ",err)
         }
         if pmsg, ok := ReceivePeerMessage(c); ok {
+            if Seen(pmsg.ID) || !ok {
+                continue
+            }
             cmd := Command{
                 Action: pmsg.Body.Action,
                 Argument: pmsg.Body.Argument,
                 Target: pmsg.Body.Target,
             }
             cmsg := ClientMessage{
+                ID: pmsg.ID,
                 Body: cmd,
                 PR: pmsg.PR,
                 Addr: pmsg.Addr,
@@ -378,18 +393,19 @@ func ReceiveFromPeers(l net.Listener) {
 }
 
 func ReceivePeerMessage(c net.Conn) (PeerMessage,bool) {
-
+    defer func() {
+        c.Close()
+    }()
+    var pmsg PeerMessage
     msg_encrypted := ReadTCPSocket(c)
     msg_decrypted := DecryptMessage(msg_encrypted)
     // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)
     msg_verified := msg_decrypted
-    var pmsg PeerMessage
     err := json.Unmarshal(msg_verified,&pmsg)
     if err != nil {
         log.Println("(ReceivePeerMessage) JSON Error <", c.RemoteAddr(), "> ", err)
+        return pmsg, false
     }
-
-    c.Close()
     return pmsg, true
 }
 
@@ -456,6 +472,12 @@ func (p *PeerChans) Copy() (map[string]chan PeerMessage) {
     return copy
 }
 
+func (p *PeerChans) Remove(addr string) {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    delete(p.m,addr)
+}
+
 func AddToChannels(pmsg PeerMessage, p map[string]chan PeerMessage) {
     for _, ch := range p {
         ch <- pmsg
@@ -473,6 +495,7 @@ func DialPeer(addr string, ch chan PeerMessage) {
     c, err := net.Dial("tcp", addr)
     if err != nil {
         log.Println("(DialPeer) Dial Error: <", addr, "> ", err)
+        DropPeer(addr)
         return
     }
     defer func() {
@@ -491,6 +514,33 @@ func DialPeer(addr string, ch chan PeerMessage) {
         return
     }
     fmt.Printf("(DialPeer) Success: %s\n",addr)
+}
+
+func DropPeer(addr string) {
+    cmd := Command{
+        Action: "DropPeer",
+        Argument: "",
+        Target: addr,
+    }
+    cmsg := ClientMessage{
+        ID: "",
+        Body: cmd,
+        PR: myPeerRank.m,
+        Addr: psoc_addr,
+    }
+    fmt.Println("(DropPeer) ",addr)
+    in <- cmsg
+}
+
+func Seen(id string) bool {
+    if id == "" {
+        return false
+    }
+    seenIDs.Lock()
+    ok := seenIDs.m[id]
+    seenIDs.m[id] = true
+    seenIDs.Unlock()
+    return ok
 }
 
 // RandomID returns an 8 byte random string in hexadecimal.
