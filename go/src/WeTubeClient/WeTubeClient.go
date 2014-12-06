@@ -121,7 +121,7 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
         // fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
         packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
-            log.Fatal("(EncryptMessage) ",err)
+            log.Fatal("(EncryptMessage) Encrypt Packet: ",err)
         } else {
             // fmt.Printf("...to [%x]\n", packet)
             encrypted_packets = append(encrypted_packets,packet)
@@ -129,7 +129,7 @@ func EncryptMessage(msg []byte, pbkey *rsa.PublicKey) []byte {
     }
     packet, err = rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*full_packets:], nil)
     if err != nil {
-        log.Fatal("(EncryptMessage) ",err)
+        log.Fatal("(EncryptMessage) Encrypt Remainder: ",err)
     } else {
         // fmt.Printf("OAEP encrypted [%s] to \n[%x]\n", string(msg[packet_size*full_packets:]), packet)
         encrypted_packets = append(encrypted_packets,packet)
@@ -173,11 +173,18 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
 
     // fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
 
-    msg := make([]byte, total_bytes)
+    var msg_splice [][]byte
+    msg := make([]byte, total_bytes/2-64)
     if _, err := ws.Read(msg); err != nil {
-        log.Println("(ReadWebSocket) Read Msg: ",err)
+        log.Println("(ReadTCPSocket) Read Msg: ",err)
     }
-    return msg
+    msg2 := make([]byte, total_bytes - total_bytes/2+64)
+    if _, err := ws.Read(msg2); err != nil {
+        log.Println("(ReadTCPSocket) Read Msg2: ",err)
+    }
+    msg_splice = append(msg_splice,msg)
+    msg_splice = append(msg_splice,msg2)
+    return bytes.Join(msg_splice,nil)
 }
 
 func ReadTCPSocket(c net.Conn) []byte {
@@ -204,6 +211,85 @@ func ReadTCPSocket(c net.Conn) []byte {
     return msg
 }
 
+func ReadDecryptWebSocket(ws *websocket.Conn) []byte {
+    total_bytes_bytes_encrypted := make([]byte,key_len/8)
+    if _, err := ws.Read(total_bytes_bytes_encrypted); err != nil {
+        log.Println("(ReadDecryptWebSocket) Read Total Bytes: ",err)
+    }
+
+    md5hash := md5.New()
+    total_bytes_bytes, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, total_bytes_bytes_encrypted, nil)
+    if err != nil {
+        log.Println("(ReadDecryptWebSocket) Decryption: ",err)
+    }
+
+    var total_bytes_32 uint32
+    total_bytes_32 = binary.LittleEndian.Uint32(total_bytes_bytes)
+    total_bytes := int(total_bytes_32)
+
+    // fmt.Printf("OAEP decrypted [%x] to \n[%d]\n",total_bytes_bytes_encrypted, total_bytes)
+    
+    var packet_size int = 1024
+    var spliced_packets [][]byte
+
+    if total_bytes + key_len/8 >= packet_size {
+
+        packet := make([]byte,packet_size-key_len/8)
+        if _, err := ws.Read(packet); err != nil {
+            log.Println("(ReadDecryptWebSocket) Read Packet: ",err)
+        }
+        // fmt.Printf("(ReadDecryptWebSocket) Received Packet\n%x\n",packet)
+        spliced_packets = append(spliced_packets,packet)
+
+        var remaining_bytes int = total_bytes - (packet_size-key_len/8)
+        var full_packets int = remaining_bytes/packet_size
+        var remainder int = remaining_bytes - full_packets*packet_size
+
+        for packet_num := 0; packet_num < full_packets; packet_num++ {
+            packet := make([]byte,packet_size)
+            if _, err := ws.Read(packet); err != nil {
+                log.Println("(ReadDecryptWebSocket) Read Packet: ",err)
+            }
+            // fmt.Printf("(ReadDecryptWebSocket) Received Packet\n%x\n",packet)
+            spliced_packets = append(spliced_packets,packet)
+        }
+        if remainder > 0 {
+            packet := make([]byte,remainder)
+            if _, err := ws.Read(packet); err != nil {
+                log.Println("(ReadDecryptWebSocket) Read Remainder: ",err)
+            }
+            // fmt.Printf("(ReadDecryptWebSocket) Received Remainder\n%x\n",packet)
+            spliced_packets = append(spliced_packets,packet)
+        }
+    } else {
+        packet := make([]byte,total_bytes)
+        if _, err := ws.Read(packet); err != nil {
+            log.Println("(ReadDecryptWebSocket) Read Packet: ",err)
+        }
+        // fmt.Printf("(ReadDecryptWebSocket) Received Packet\n%x\n",packet)
+        spliced_packets = append(spliced_packets,packet)
+    }
+    msg := bytes.Join(spliced_packets,nil)
+    // fmt.Printf("Encrypted Message Received\n%x\n",msg)
+
+    // md5hash := md5.New()
+    var decrypted_packets [][]byte
+    var msg_len int = len(msg)
+    packet_size = key_len/8 // key_len measured in bits and each byte is 8 bits
+    full_packets := msg_len/packet_size
+    for packet_num := 0; packet_num < full_packets; packet_num++ {
+        // fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
+        packet, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
+        if err != nil {
+            log.Fatal("(ReadDecryptWebSocket) ",err)
+        } else {
+            // fmt.Printf("...to [%s]\n", packet)
+            decrypted_packets = append(decrypted_packets,packet)
+        }
+    }
+    return bytes.Join(decrypted_packets,nil)
+}
+
 // ONLY FOR LOCAL TESTING
 func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
     url := "ws://localhost:8080/ws/go"
@@ -226,8 +312,7 @@ func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
     fmt.Println("Sent public key to server")
 
     // Retrieve Client Websocket and P2P Socket Addresses
-    msg_encrypted := ReadWebSocket(ws)
-    msg_decrypted := DecryptMessage(msg_encrypted)
+    msg_decrypted := ReadDecryptWebSocket(ws)
     // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)
     msg_verified := msg_decrypted
     var smsg ServerInit
@@ -541,13 +626,6 @@ func Seen(id string) bool {
     seenIDs.m[id] = true
     seenIDs.Unlock()
     return ok
-}
-
-// RandomID returns an 8 byte random string in hexadecimal.
-func RandomID() string {
-    b := make([]byte, 8)
-    n, _ := rand.Read(b)
-    return fmt.Sprintf("%x", b[:n])
 }
 
 func main() {

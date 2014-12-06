@@ -42,7 +42,6 @@ function onPlayerStateChange(event) {
 
 // OnClick Video Commands
 function playVideo(): void {
-  // player.playVideo();
   var cmd = {
     Action: "Play",
     Argument: null,
@@ -55,7 +54,6 @@ function playVideo(): void {
 }
 
 function pauseVideo(): void {
-  // player.pauseVideo();
   var cmd = {
     Action: "Pause",
     Argument: null,
@@ -68,7 +66,6 @@ function pauseVideo(): void {
 }
 
 function stopVideo(): void {
-  // player.stopVideo();
   var cmd = {
     Action: "Stop",
     Argument: null,
@@ -81,7 +78,6 @@ function stopVideo(): void {
 }
 
 function seekTo(seconds: number): void {
-  // player.seekTo(seconds,true);
   var cmd = {
     Action: "SeekTo",
     Argument: seconds.toString(),
@@ -117,7 +113,6 @@ function PromoteEditor(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(PromoteEditor) Editor->Director")
-    // ChangeRankHTML('Editor','Director',index);
   }
 }
 
@@ -134,7 +129,6 @@ function DemoteDirector(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(DemoteDirector) Director->Editor")
-    // ChangeRankHTML('Director','Editor',index);
   }
 }
 
@@ -151,7 +145,6 @@ function PromoteViewer(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(PromoteViewer) Viewer->Editor");
-    // ChangeRankHTML('Viewer','Editor',index);
   }
 }
 
@@ -168,7 +161,6 @@ function DemoteEditor(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(DemoteEditor) Editor->Viewer")
-    // ChangeRankHTML('Editor','Viewer',index)
   }
 }
 
@@ -185,7 +177,6 @@ function KingViewer(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(KingViewer) Viewer->Director")
-    // ChangeRankHTML('Viewer','Director',index);
   }
 }
 
@@ -202,7 +193,6 @@ function CrushDirector(): void {
     Seen[msg.ID] = true
     cws.send(JSON.stringify(msg));
     console.log("(CrushDirector) Director->Viewer")
-    // ChangeRankHTML('Director','Viewer',index);
   }
 }
 
@@ -229,7 +219,7 @@ function ClientWebSocket(): void {
 // Update myPeerRank & HTML Ranks
 function UpdatePeers(PR: any): void {
   for (var addr in PR) {
-    if (!myPeerRank[addr]) {
+    if (!(addr in myPeerRank)) {
       myPeerRank[addr] = PR[addr];
       var index = AddHTMLRank(addr,PR[addr]);
       if (index >= 0) {
@@ -423,59 +413,6 @@ function HandleMessage(msg: any): void {
   }
 }
 
-// Handle Peer Messages
-// function HandleMessage(msg: any): void {
-
-//   switch(msg.Body.Action) {
-//     case "NewPeer":
-//       console.log("(HandleMessage) NewPeer");
-//       UpdatePeers(msg.PR)
-//       break;
-//     case "Play":
-//       if (myPeerRank[msg.Addr] > 0) {
-//         console.log("(HandleMessage) Play");
-//         player.playVideo();
-//       }
-//       break;
-//     case "Pause":
-//       if (myPeerRank[msg.Addr] > 0) {
-//         console.log("(HandleMessage) Pause");
-//         player.pauseVideo();
-//       }
-//       break;
-//     case "Stop":
-//       if (myPeerRank[msg.Addr] > 0) {
-//         console.log("(HandleMessage) Stop");
-//         player.stopVideo();
-//       }
-//       break;
-//     case "SeekTo":
-//       if (myPeerRank[msg.Addr] > 0) {
-//         console.log("(HandleMessage) SeekTo");
-//         player.seekTo(msg.Body.Argument,true);
-//       }
-//       break;
-//     case "ChangeRank":
-//       if (myPeerRank[msg.Addr] > 1) {
-//         console.log("(HandleMessage) ChangeRank");
-//         ChangeRankHTML(Rank2Str(myPeerRank[msg.Body.Target]),msg.Body.Argument,myPeerIndex[msg.Body.Target])
-//       }
-//       break;
-//     default:
-//       console.log("(HandleMessage) Command Not Recognized");
-//   }
-// }
-
-// Populate HTML Ranks on Startup
-function PopulateHTMLRanks(): void {
-  for (var addr in myPeerRank) {
-    var index = AddHTMLRank(addr,myPeerRank[addr]);
-    if (index >= 0) {
-      myPeerIndex[addr] = index
-    }
-  }
-}
-
 // Update Single HTML Rank - might want to make this check to see if addr is already in rank list or somewhere in ranks
 function AddHTMLRank(addr: string, rank: number): number {
   var option = document.createElement("option");
@@ -489,12 +426,12 @@ function AddHTMLRank(addr: string, rank: number): number {
   case Rank.Editor:
     console.log("(AddHTMLRank) Adding Editor");
     (<HTMLSelectElement>document.getElementById('Editor')).add(option);
-    return (<HTMLSelectElement>document.getElementById('Director')).length-1
+    return (<HTMLSelectElement>document.getElementById('Editor')).length-1
     break;
   case Rank.Viewer:
     console.log("(AddHTMLRank) Adding Viewer");
     (<HTMLSelectElement>document.getElementById('Viewer')).add(option);
-    return (<HTMLSelectElement>document.getElementById('Director')).length-1
+    return (<HTMLSelectElement>document.getElementById('Viewer')).length-1
     break;
   default:   
     console.log("(AddHTMLRank) Rank Not Recognized");
