@@ -265,18 +265,20 @@ function RemovePeerHTML(addr) {
 }
 
 function DropPeer(addr) {
-    RemovePeerHTML(addr);
-    delete myPeerRank[addr];
-    delete myPeerIndex[addr];
-    var cmd = {
-        Action: "DropPeer",
-        Argument: null,
-        Target: addr
-    };
-    var msg = { ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null };
-    Seen[msg.ID] = true;
-    cws.send(JSON.stringify(msg));
-    console.log("(DropPeer) " + addr);
+    if (addr in myPeerRank) {
+        RemovePeerHTML(addr);
+        delete myPeerRank[addr];
+        delete myPeerIndex[addr];
+        var cmd = {
+            Action: "DropPeer",
+            Argument: null,
+            Target: addr
+        };
+        var msg = { ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null };
+        Seen[msg.ID] = true;
+        cws.send(JSON.stringify(msg));
+        console.log("(DropPeer) " + addr);
+    }
 }
 
 function HandleMessage(msg) {
