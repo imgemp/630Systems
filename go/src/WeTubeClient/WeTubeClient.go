@@ -15,6 +15,7 @@ import (
     "encoding/binary"
     "encoding/gob"
     "os"
+    "crypto"
 )
 
 // Types and Globals
@@ -65,6 +66,8 @@ type PeerMessage struct {
     Body Command
     PR map[string]int
     PK map[string]rsa.PublicKey
+    Hashed []byte
+    Sig []byte
 }
 
 var (
@@ -290,6 +293,40 @@ func ReadDecryptWebSocket(ws *websocket.Conn) []byte {
     return bytes.Join(decrypted_packets,nil)
 }
 
+func SignMessage(pmsg PeerMessage) PeerMessage {
+
+    pmsg_bytes, err := json.Marshal(pmsg)
+    if err != nil {
+        log.Fatal("(SignMessage) JSON Error: ", err)
+    }
+
+    newhash := crypto.MD5
+    pssh := newhash.New()
+    pssh.Write(pmsg_bytes)
+    hashed := pssh.Sum(nil)
+
+    signaturePSS, err := rsa.SignPSS(rand.Reader, pvkey, newhash, hashed, nil)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+    pmsg.Hashed = hashed
+    pmsg.Sig = signaturePSS
+
+    return pmsg
+}
+
+func VerifyMessage(pmsg PeerMessage) error {
+    if pmsg.Body.Action != "NewPeer" {
+        newhash := crypto.MD5
+        peer_pbkey := myPeerKeys.m[pmsg.Addr]
+        err := rsa.VerifyPSS(&peer_pbkey, newhash, pmsg.Hashed, pmsg.Sig, nil)
+        return err
+    } else {
+        return nil
+    }
+}
+
 // ONLY FOR LOCAL TESTING
 func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
     url := "ws://localhost:8080/ws/go"
@@ -353,6 +390,7 @@ func ReceiveFromClient(ws *websocket.Conn) {
                 PR: myPeerRank.m,
                 PK: myPeerKeys.m,
             }
+            pmsg = SignMessage(pmsg)
             if cmd.Action == "DropPeer" {
                 myPeerChans.Remove(cmd.Target)
             }
@@ -484,13 +522,17 @@ func ReceivePeerMessage(c net.Conn) (PeerMessage,bool) {
     var pmsg PeerMessage
     msg_encrypted := ReadTCPSocket(c)
     msg_decrypted := DecryptMessage(msg_encrypted)
-    // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)
-    msg_verified := msg_decrypted
-    err := json.Unmarshal(msg_verified,&pmsg)
+    err := json.Unmarshal(msg_decrypted,&pmsg)
     if err != nil {
-        log.Println("(ReceivePeerMessage) JSON Error <", c.RemoteAddr(), "> ", err)
+        log.Fatal("(ReceivePeerMessage) JSON Error <", c.RemoteAddr(), "> ", err)
         return pmsg, false
     }
+    err = VerifyMessage(pmsg)
+    if err != nil {
+        log.Fatal("(ReceivePeerMessage) Verification Error <", c.RemoteAddr(), "> ", err)
+        return pmsg, false
+    }
+    fmt.Println("Message Decrypted and Verified")
     return pmsg, true
 }
 
@@ -591,7 +633,6 @@ func DialPeer(addr string, ch chan PeerMessage) {
         log.Println("(DialPeer) JSON Error: <", addr, "> ", err)
         return
     }
-    // sign message
     peer_pbkey := myPeerKeys.m[addr]
     pmsg_encrypted := EncryptMessage(pmsg_bytes,&peer_pbkey)
     if _, err := c.Write(pmsg_encrypted); err != nil {

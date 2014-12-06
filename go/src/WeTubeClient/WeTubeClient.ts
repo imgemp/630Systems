@@ -267,18 +267,20 @@ function RemovePeerHTML(addr: string) {
 }
 
 function DropPeer(addr: string) {
-  RemovePeerHTML(addr)
-  delete myPeerRank[addr]
-  delete myPeerIndex[addr]
-  var cmd = {
-    Action: "DropPeer",
-    Argument: null, // put vote here?
-    Target: addr,
-  };
-  var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
-  Seen[msg.ID] = true
-  cws.send(JSON.stringify(msg));
-  console.log("(DropPeer) "+addr);
+  if (addr in myPeerRank) {
+    RemovePeerHTML(addr)
+    delete myPeerRank[addr]
+    delete myPeerIndex[addr]
+    var cmd = {
+      Action: "DropPeer",
+      Argument: null, // put vote here?
+      Target: addr,
+    };
+    var msg = {ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null};
+    Seen[msg.ID] = true
+    cws.send(JSON.stringify(msg));
+    console.log("(DropPeer) "+addr);
+  }
 }
 
 function HandleMessage(msg: any): void {
@@ -288,6 +290,7 @@ function HandleMessage(msg: any): void {
   } else if (msg.Body.Action == "DropPeer") {
     console.log("(HandleMessage) DropPeer");
     DropPeer(msg.Body.Target);
+    // check for empty director list and run election
   } else if (Seen[msg.ID]) {
     switch(msg.Body.Action) {
       case "Play":
