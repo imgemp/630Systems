@@ -11,7 +11,7 @@ This system requires the user to install Go.  All testing was done in the Google
 ##Dependencies
 **Go**:
 
-See [Go](https://golang.org/doc/install)
+You must have Go installed.  See [Go](https://golang.org/doc/install)
 
 ##Usage
 
