@@ -1,7 +1,9 @@
 WeTube
 ==========
 
-#Ian Gemp
+Ian Gemp
+----------
+
 ##Description
 WeTube is a peer to peer system implemented in Go that allows multiple users to watch YouTube videos synchronously (see wetubedescription.pdf).  This implementation is meant for academic purposes only; it is not production ready.  The controls available to the users consist of only play, pause, stop, seek, and role promotion/demotion.  The player only plays one video.  The peers are simulated as different ports.
   
@@ -19,9 +21,9 @@ After downloading the code, installing Go, and setting your PATH and GOPATH envi
 
 ###User Priveleges
 Privilege levels separate the users into different levels of control.  Viewers are at the bottom of the hierarchy and Directors are at the top.  Each successive level adds new abilities.  Use the arrows next to the select fields to change the privilege levels of peers.
-Viewers - View Only
-Editors - Video Controls
-Directors - Privilege Manipulation
+- Viewers - View Only
+- Editors - Video Controls
+- Directors - Privilege Manipulation
 
 ###Encryption/Decryption + Signatures
 All messages are encrypted with [RSA](http://golang.org/pkg/crypto/rsa/)-OAEP.  The server public key is saved to file in both the WeTubeClient and WeTubeServer (although unnecessary) directories and is loaded at startup.  All messages between peers are signed with RSASSA-PSS.  The server is assumed to be trusted; no certificate or signatures exist in the initial client-server handoff.  Due to message length limits set by go's RSA package, messages are broken up and encrypted individually and then spliced back together.  The encrypted message length itself is encrypted and prepended to the encrypted message to enable decryption by peers.
