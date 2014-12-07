@@ -18,17 +18,17 @@ You must have Go installed.  See [Go](https://golang.org/doc/install).
 ##Usage
 
 Steps:
-- Setup
-- - export PATH=$PATH:$GOROOT/bin (where $GOROOT is the path to your Go installation e.g. /usr/local/go)
-- - export GOPATH=$HOME/go (where $HOME is the path to the local clone of this repo)
-- - export PATH=$PATH:$GOPATH/bin
-- Run
-- - Open up four bash shells (Terminals)
-- - In each shell, cd $GOPATH/..
-- - In one shell, WeTubeServer  enter
-- - In the other 3 shells, WeTubeClient enter
-- - Open up a browser (preferably Chrome)
-- - Open up 3 tabs and go to [http://localhost:8080/](http://localhost:8080/) in each one
+*Setup*
+- export PATH=$PATH:$GOROOT/bin (where $GOROOT is the path to your Go installation e.g. /usr/local/go)
+- export GOPATH=$HOME/go (where $HOME is the path to the local clone of this repo)
+- export PATH=$PATH:$GOPATH/bin
+*Run*
+- Open up four bash shells (Terminals)
+- In each shell, cd $GOPATH/..
+- In one shell, WeTubeServer  `enter`
+- In the other 3 shells, WeTubeClient `enter`
+- Open up a browser (preferably Chrome)
+- Open up 3 tabs and go to [http://localhost:8080/](http://localhost:8080/) in each one
 
 You should now be ready to try out any of the features described below.  Useful comments are printed to the browser javascript console and shells respectively (e.g message contents w/ keys, user requests/commands, election results, etc.)
 
