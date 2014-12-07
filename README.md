@@ -18,11 +18,15 @@ You must have Go installed.  See [Go](https://golang.org/doc/install).
 ##Usage
 
 Steps:
+
 *Setup*
+
 - export PATH=$PATH:$GOROOT/bin (where $GOROOT is the path to your Go installation e.g. /usr/local/go)
 - export GOPATH=$HOME/go (where $HOME is the path to the local clone of this repo)
 - export PATH=$PATH:$GOPATH/bin
+- 
 *Run*
+
 - Open up four bash shells (Terminals)
 - In each shell, cd $GOPATH/..
 - In one shell, WeTubeServer  `enter`
