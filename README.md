@@ -24,7 +24,7 @@ Steps:
 - export PATH=$PATH:$GOROOT/bin (where $GOROOT is the path to your Go installation e.g. /usr/local/go)
 - export GOPATH=$HOME/go (where $HOME is the path to the local clone of this repo)
 - export PATH=$PATH:$GOPATH/bin
-- 
+
 *Run*
 
 - Open up four bash shells (Terminals)
