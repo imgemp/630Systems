@@ -94,6 +94,11 @@ function ChangeRankHTML(fromRank, toRank, index) {
         document.getElementById(toRank).add(option);
         myPeerRank[option.text] = Str2Rank(toRank);
         myPeerIndex[option.text] = document.getElementById(toRank).length - 1;
+        for (var other_addr in myPeerRank) {
+            if ((myPeerRank[other_addr] == Str2Rank(fromRank)) && (myPeerIndex[other_addr] > index)) {
+                myPeerIndex[other_addr] -= 1;
+            }
+        }
         console.log("(ChangeRankHTML) " + fromRank + " to " + toRank + ": " + option.text);
     }
 }
@@ -278,6 +283,108 @@ function DropPeer(addr) {
         Seen[msg.ID] = true;
         cws.send(JSON.stringify(msg));
         console.log("(DropPeer) " + addr);
+        if (document.getElementById('Director').length < 2) {
+            if (CountVoters() < 2) {
+                ChangeRankHTML(Rank2Str(myPeerRank[psoc]), "Director", myPeerIndex[psoc]);
+            } else {
+                StartElection();
+            }
+        }
+    }
+}
+
+function PeerList() {
+    var PL = [];
+    for (var addr in myPeerRank) {
+        PL.push(addr);
+    }
+    return PL;
+}
+
+function MakeVote() {
+    var PL = PeerList();
+    var randomPick = Math.floor((Math.random() * PL.length) + 0);
+    var myVote = PL[randomPick];
+    return myVote;
+}
+
+function CountVotes() {
+    var count = 0;
+    for (var addr in Votes) {
+        count += 1;
+    }
+    return count;
+}
+
+function CountVoters() {
+    var count = 0;
+    for (var addr in myPeerRank) {
+        count += 1;
+    }
+    return count;
+}
+
+function StartElection() {
+    Votes = {};
+    var numVoters = document.getElementById('Director').length + document.getElementById('Editor').length + document.getElementById('Viewer').length - 3;
+    var myVote = MakeVote();
+    Votes[psoc] = myVote;
+    var cmd = {
+        Action: "Vote",
+        Argument: psoc,
+        Target: myVote
+    };
+    var msg = { ID: Math.random().toString(), Body: cmd, PR: myPeerRank, Addr: null };
+    Seen[msg.ID] = true;
+    cws.send(JSON.stringify(msg));
+    console.log("(StartElection) myVote: " + myVote);
+}
+
+function isMajority() {
+    var candidates = {};
+    var winner = psoc;
+    candidates[winner] = 0;
+    var maj = false;
+    for (var voter in Votes) {
+        var candidate = Votes[voter];
+        if (candidates[candidate] == undefined) {
+            candidates[candidate] = 1;
+        } else {
+            candidates[candidate] += 1;
+        }
+        if (candidates[candidate] > candidates[winner]) {
+            maj = true;
+            winner = candidate;
+        } else if (candidate == winner) {
+            maj = true;
+        } else if (candidates[candidate] == candidates[winner]) {
+            maj = true; // break ties with larger address
+            if (parseInt(candidate.slice(1)) > parseInt(winner.slice(1))) {
+                winner = candidate;
+            }
+        }
+    }
+    return [maj, winner];
+}
+
+function Vote(cmd) {
+    if (!(cmd.Argument in Votes)) {
+        Votes[cmd.Argument] = cmd.Target;
+    }
+    if (!(psoc in Votes)) {
+        Votes[psoc] = MakeVote();
+    }
+    if (CountVotes() == CountVoters()) {
+        console.log("Votes Are In");
+        console.log(Votes);
+        var result = isMajority();
+        var isMaj = result[0];
+        if (isMaj) {
+            var winner = result[1];
+            ChangeRankHTML(Rank2Str(myPeerRank[winner]), "Director", myPeerIndex[winner]);
+        } else {
+            StartElection();
+        }
     }
 }
 
@@ -288,6 +395,9 @@ function HandleMessage(msg) {
     } else if (msg.Body.Action == "DropPeer") {
         console.log("(HandleMessage) DropPeer");
         DropPeer(msg.Body.Target);
+    } else if (msg.Body.Action == "Vote") {
+        console.log("(HandleMessage) Vote");
+        Vote(msg.Body);
     } else if (Seen[msg.ID]) {
         switch (msg.Body.Action) {
             case "Play":
@@ -311,9 +421,12 @@ function HandleMessage(msg) {
                 player.seekTo(msg.Body.Argument, true);
                 break;
             case "ChangeRank":
-                console.log("(HandleMessage/Boomerang/ChangeRank) *Mote Editor");
+                console.log("(HandleMessage/Boomerang/ChangeRank) *Mote ", Rank2Str(myPeerRank[msg.Body.Target]));
                 ChangeRankHTML(Rank2Str(myPeerRank[msg.Body.Target]), msg.Body.Argument, myPeerIndex[msg.Body.Target]);
                 cws.send(JSON.stringify(msg));
+                if (msg.Body.Argument == "Director") {
+                    Votes = {};
+                }
                 break;
             default:
                 console.log("(HandleMessage/Boomerang) Command " + msg.Body.Action + " Not Recognized");
@@ -351,11 +464,17 @@ function HandleMessage(msg) {
                                 console.log("(HandleMessage/Director/ChangeRank) *Mote Editor");
                                 ChangeRankHTML("Editor", msg.Body.Argument, myPeerIndex[msg.Body.Target]);
                                 cws.send(JSON.stringify(msg));
+                                if (msg.Body.Argument == "Director") {
+                                    Votes = {};
+                                }
                                 break;
                             case 0 /* Viewer */:
                                 console.log("(HandleMessage/Director/ChangeRank) *Mote Viewer");
                                 ChangeRankHTML("Viewer", msg.Body.Argument, myPeerIndex[msg.Body.Target]);
                                 cws.send(JSON.stringify(msg));
+                                if (msg.Body.Argument == "Director") {
+                                    Votes = {};
+                                }
                                 break;
                             default:
                                 console.log("(HandleMessage/Director/ChangeRank) My Rank Of " + myPeerRank[msg.Body.Target] + " Not Recognized");
@@ -422,6 +541,7 @@ function AddHTMLRank(addr, rank) {
             console.log("(AddHTMLRank) Adding Director");
             document.getElementById('Director').add(option);
             return document.getElementById('Director').length - 1;
+            Votes = {};
             break;
         case 1 /* Editor */:
             console.log("(AddHTMLRank) Adding Editor");
@@ -453,11 +573,12 @@ var psoc;
 var myPeerRank = {};
 var myPeerIndex = {};
 var Seen = {};
+var Votes = {};
 var sws = new WebSocket("ws://localhost:8080/ws/js", "protocolOne");
 sws.onmessage = function (event) {
     cws_addr = "ws://localhost" + JSON.parse(event.data) + "/ws";
     psoc = ":" + (parseInt(JSON.parse(event.data).slice(1)) + 1).toString();
-    document.getElementById('psoc').innerHTML = psoc;
+    document.getElementById('psoc').innerHTML += psoc;
     console.log(psoc);
     ClientWebSocket();
     sws.close();
