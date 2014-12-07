@@ -42,9 +42,9 @@ The browser javascript client and native go client communicate through an unsecu
 ##Message Passing
 Users are required to be allowed to attempt any action they wish in their browser irrespective of their privilege level.  For this reason, I could not simply disable buttons based on privelege levels.  Instead, I used a message passing paradigm where all actions are interpreted as outgoing requests from the user to the peer pool.  The requests are then validated individually by each peer and returned to the user if the action was legal.  In this sense, all incoming actions are commands.  The exceptions to this paradigm are elections/votes, new peer introductions, and dropped connection alerts.
 
+##Channels & Locks
 Within Go, channels are used extensively to take advantage of go's asynchronous subroutines.  One channel is dedicated to distributing incoming messages to the client, another is used for storing outgoing messages from the client, and set of channels (for each peer) is dedicated to distributing messages concurrently to all peers.
 
-##Locks
 Locks are used to maintain the integrity of various peer information maps, the peer channels, and the seen map (to track duplicate messages).  This is necessary in the presence of the concurrent go processes and infinite for loops.
 
 ##Acknowledgements
