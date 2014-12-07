@@ -17,7 +17,20 @@ You must have Go installed.  See [Go](https://golang.org/doc/install).
 
 ##Usage
 
-After downloading the code, installing Go, and setting your PATH and GOPATH environment variables accordingly, cd to the top level directory of your WeTube folder and run WeTubeServer.  Open up a few more shells to simulate peers and run WeTubeClient in each of those.  Now open up a tab for each one of the peers in a browser.  Go to [http://localhost:8080/](http://localhost:8080/) in each one of those tabs.  You should see a YouTube video in each tab with its corresponding address and a set of controls underneath.  Once all tabs have loaded, feel free to test out the features below.
+Steps:
+- Setup
+- - export PATH=$PATH:$GOROOT/bin (where $GOROOT is the path to your Go installation e.g. /usr/local/go)
+- - export GOPATH=$HOME/go (where $HOME is the path to the local clone of this repo)
+- - export PATH=$PATH:$GOPATH/bin
+- Run
+- - Open up four bash shells (Terminals)
+- - In each shell, cd $GOPATH/..
+- - In one shell, WeTubeServer  enter
+- - In the other 3 shells, WeTubeClient enter
+- - Open up a browser (preferably Chrome)
+- - Open up 3 tabs and go to [http://localhost:8080/](http://localhost:8080/) in each one
+
+You should now be ready to try out any of the features described below.  Useful comments are printed to the browser javascript console and shells respectively (e.g message contents w/ keys, user requests/commands, election results, etc.)
 
 ###User Priveleges
 Privilege levels separate the users into different levels of control.  Viewers are at the bottom of the hierarchy and Directors are at the top.  Each successive level adds new abilities.  Use the arrows next to the select fields to change the privilege levels of peers.
