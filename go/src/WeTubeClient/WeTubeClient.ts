@@ -383,6 +383,7 @@ function Vote(cmd: any): void {
     var isMaj = result[0];
     if (isMaj) {
       var winner = result[1];
+      console.log("Winner is "+winner);
       ChangeRankHTML(Rank2Str(myPeerRank[winner]),"Director",myPeerIndex[winner]);
     } else {
       StartElection();
