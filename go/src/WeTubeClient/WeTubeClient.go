@@ -16,6 +16,7 @@ import (
     "encoding/gob"
     "os"
     "crypto"
+    // "time"
 )
 
 // Types and Globals
@@ -347,7 +348,7 @@ func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
         log.Fatal("(RetrieveSockets) ",err)
     }
     fmt.Println("Sent public key to server")
-
+    // time.Sleep(2 * time.Second)
     // Retrieve Client Websocket and P2P Socket Addresses
     msg_decrypted := ReadDecryptWebSocket(ws)
     // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)
