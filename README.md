@@ -28,7 +28,7 @@ Steps:
 *Run*
 
 - Open up four bash shells (Terminals)
-- In each shell, cd $GOPATH/..
+- In each shell, cd "$GOPATH"/..
 - In one shell, WeTubeServer  `enter`
 - In the other 3 shells, WeTubeClient `enter`
 - Open up a browser (preferably Chrome)
