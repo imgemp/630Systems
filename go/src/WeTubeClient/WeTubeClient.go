@@ -16,7 +16,6 @@ import (
     "encoding/gob"
     "os"
     "crypto"
-    // "time"
 )
 
 // Types and Globals
@@ -244,11 +243,11 @@ func ReadDecryptWebSocket(ws *websocket.Conn) []byte {
         }
         // fmt.Printf("(ReadDecryptWebSocket) Received Packet\n%x\n",packet)
         spliced_packets = append(spliced_packets,packet)
-
+        
         var remaining_bytes int = total_bytes - (packet_size-key_len/8)
         var full_packets int = remaining_bytes/packet_size
         var remainder int = remaining_bytes - full_packets*packet_size
-
+        
         for packet_num := 0; packet_num < full_packets; packet_num++ {
             packet := make([]byte,packet_size)
             if _, err := ws.Read(packet); err != nil {
@@ -276,7 +275,6 @@ func ReadDecryptWebSocket(ws *websocket.Conn) []byte {
     msg := bytes.Join(spliced_packets,nil)
     // fmt.Printf("Encrypted Message Received\n%x\n",msg)
 
-    // md5hash := md5.New()
     var decrypted_packets [][]byte
     var msg_len int = len(msg)
     packet_size = key_len/8 // key_len measured in bits and each byte is 8 bits
@@ -348,7 +346,7 @@ func RetrieveSockets(pbkey_Server *rsa.PublicKey) {
         log.Fatal("(RetrieveSockets) ",err)
     }
     fmt.Println("Sent public key to server")
-    // time.Sleep(2 * time.Second)
+    
     // Retrieve Client Websocket and P2P Socket Addresses
     msg_decrypted := ReadDecryptWebSocket(ws)
     // VerifyPKCS1v15(pbkey, hash crypto.Hash, hashed []byte, sig []byte) (err error)

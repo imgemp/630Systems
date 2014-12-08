@@ -146,7 +146,7 @@ func EncryptWriteWebSocket(ws *websocket.Conn, msg []byte, pbkey *rsa.PublicKey)
     packet_size = 1024
     full_packets = encrypted_msg_length/packet_size
     remainder = encrypted_msg_length - full_packets*packet_size
-
+    
     for packet_num := 0; packet_num < full_packets; packet_num++ {
         packet := encrypted_msg[packet_size*packet_num:packet_size*(packet_num+1)]
         if _, err := ws.Write(packet); err != nil {
