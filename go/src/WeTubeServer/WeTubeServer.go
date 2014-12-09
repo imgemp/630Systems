@@ -11,7 +11,7 @@ import (
     "strings"
     "crypto/rsa"
     "crypto/rand"
-    "crypto/md5"
+    "crypto/sha1"
     "encoding/binary"
     "bytes"
     "os"
@@ -57,14 +57,14 @@ const (
 )
 
 func DecryptMessage(msg []byte) []byte {
-    md5hash := md5.New()
+    sha1hash := sha1.New()
     var decrypted_packets [][]byte
     var msg_len int = len(msg)
     var packet_size int = key_len/8 // key_len measured in bits and each byte is 8 bits
     var full_packets int = msg_len/packet_size
     for packet_num := 0; packet_num < full_packets; packet_num++ {
         // fmt.Printf("OAEP decrypting [%x]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
-        packet, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
+        packet, err := rsa.DecryptOAEP(sha1hash, rand.Reader, pvkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Fatal("(DecryptMessage) ",err)
         } else {
@@ -81,8 +81,8 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
         log.Println("(ReadWebSocket) ",err)
     }
 
-    md5hash := md5.New()
-    total_bytes_bytes, err := rsa.DecryptOAEP(md5hash, rand.Reader, pvkey, total_bytes_bytes_encrypted, nil)
+    sha1hash := sha1.New()
+    total_bytes_bytes, err := rsa.DecryptOAEP(sha1hash, rand.Reader, pvkey, total_bytes_bytes_encrypted, nil)
     if err != nil {
         log.Println("(ReadWebSocket) ",err)
     }
@@ -100,7 +100,7 @@ func ReadWebSocket(ws *websocket.Conn) []byte {
 }
 
 func EncryptWriteWebSocket(ws *websocket.Conn, msg []byte, pbkey *rsa.PublicKey) error {
-    md5hash := md5.New()
+    sha1hash := sha1.New()
     var encrypted_packets [][]byte
     var msg_len int = len(msg)
     var packet_size int = 32
@@ -116,13 +116,13 @@ func EncryptWriteWebSocket(ws *websocket.Conn, msg []byte, pbkey *rsa.PublicKey)
 
     total_bytes_bytes := make([]byte,4)
     binary.LittleEndian.PutUint32(total_bytes_bytes,total_bytes)
-    packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, total_bytes_bytes, nil)
+    packet, err := rsa.EncryptOAEP(sha1hash, rand.Reader, pbkey, total_bytes_bytes, nil)
     encrypted_packets = append(encrypted_packets,packet)
     // fmt.Printf("OAEP encrypted [%d] to \n[%x]\n", total_bytes, packet)
 
     for packet_num := 0; packet_num < full_packets; packet_num++ {
         // fmt.Printf("OAEP encrypting [%s]...\n", string(msg[packet_size*packet_num:packet_size*(packet_num+1)]))
-        packet, err := rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
+        packet, err := rsa.EncryptOAEP(sha1hash, rand.Reader, pbkey, msg[packet_size*packet_num:packet_size*(packet_num+1)], nil)
         if err != nil {
             log.Println("(EncryptWriteWebSocket) Encrypt Packet: ",err)
             return err
@@ -131,7 +131,7 @@ func EncryptWriteWebSocket(ws *websocket.Conn, msg []byte, pbkey *rsa.PublicKey)
             encrypted_packets = append(encrypted_packets,packet)
         }
     }
-    packet, err = rsa.EncryptOAEP(md5hash, rand.Reader, pbkey, msg[packet_size*full_packets:], nil)
+    packet, err = rsa.EncryptOAEP(sha1hash, rand.Reader, pbkey, msg[packet_size*full_packets:], nil)
     if err != nil {
         log.Println("(EncryptWriteWebSocket) Encrypt Remainder: ",err)
         return err
