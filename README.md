@@ -49,7 +49,7 @@ All messages are encrypted with [RSA](http://golang.org/pkg/crypto/rsa/)-OAEP.  
 If all the directors of the video are dropped, a new director is elected.  The peer with the largest port address is selected in the case of a tie.  Although a single peer will be upgraded to Director status if all other peers drop, the last man standing will be unable to control the video due to the message passing paradigm.  To test this feature, simply drop a director (either close the tab, go to another webpage, or abort (`Ctrl-C`) a director's Go client) and perform an operation with any one of the remaining WeTube peers (play, promote viewer, etc.).
 
 ##Known Bugs
-The Go client downloads the set of peer public keys from the HTTP server on startup.  For some reason, a number of trailing bytes are lost in this transaction.  This bug causes the system to reject anything more than 3 peers most likely because message length (# of public keys in bytes) increases beyond some mysterious threshold.
+The Go client downloads the set of peer public keys from the HTTP server on startup.  For some reason, a number of trailing bytes are lost in this transaction (probably due to the complications of 2 peers simultaneously writing/reading on the same websocket without listeners).  This bug causes the system to reject anything more than 3 peers most likely because message length (# of public keys in bytes) increases beyond some mysterious threshold.  I'll separate this comm channel at some point to hopefully fix this limitation.
 
 There are probably other bugs lurking elsewhere, but it's hard to test for them when you can only run 3 peers at once.
 
